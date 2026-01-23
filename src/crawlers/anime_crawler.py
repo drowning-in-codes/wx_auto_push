@@ -1,6 +1,7 @@
 from .base_crawler import BaseCrawler
 from bs4 import BeautifulSoup
 import re
+import random
 
 
 class AnimeCrawler(BaseCrawler):

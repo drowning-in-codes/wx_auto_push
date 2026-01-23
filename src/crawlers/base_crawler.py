@@ -4,16 +4,30 @@ from bs4 import BeautifulSoup
 
 
 class BaseCrawler:
-    def __init__(self, urls):
+    def __init__(self, urls, proxy_config=None):
         self.urls = urls
+        self.proxy_config = proxy_config or {}
 
     def get_random_url(self):
         return random.choice(self.urls)
 
+    def _get_proxies(self):
+        """
+        获取代理配置
+        """
+        if self.proxy_config.get("enabled"):
+            return {
+                "http": self.proxy_config.get("http_proxy"),
+                "https": self.proxy_config.get("https_proxy"),
+            }
+        return None
+
     def crawl(self):
         url = self.get_random_url()
         try:
-            response = requests.get(url, headers=self._get_headers())
+            response = requests.get(
+                url, headers=self._get_headers(), proxies=self._get_proxies()
+            )
             response.raise_for_status()
             return self.parse(response.text, url)
         except Exception as e:

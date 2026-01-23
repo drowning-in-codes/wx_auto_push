@@ -3,9 +3,10 @@ import json
 
 
 class LLMClient:
-    def __init__(self, config):
+    def __init__(self, config, proxy_config=None):
         self.model = config.get("model", "openai")
         self.config = config
+        self.proxy_config = proxy_config or {}
 
         if self.model == "openai":
             openai_config = config.get("openai", {})
@@ -19,6 +20,17 @@ class LLMClient:
             self.prompt = gemini_config.get("prompt")
         else:
             raise ValueError(f"不支持的模型类型: {self.model}")
+
+    def _get_proxies(self):
+        """
+        获取代理配置
+        """
+        if self.proxy_config.get("enabled"):
+            return {
+                "http": self.proxy_config.get("http_proxy"),
+                "https": self.proxy_config.get("https_proxy"),
+            }
+        return None
 
     def rewrite_content(self, content):
         if self.model == "openai":
@@ -52,7 +64,9 @@ class LLMClient:
                 "max_tokens": 500,
             }
 
-            response = requests.post(self.api_url, headers=headers, json=data)
+            response = requests.post(
+                self.api_url, headers=headers, json=data, proxies=self._get_proxies()
+            )
             response.raise_for_status()
 
             result = response.json()
@@ -80,7 +94,9 @@ class LLMClient:
                 "max_tokens": 50,
             }
 
-            response = requests.post(self.api_url, headers=headers, json=data)
+            response = requests.post(
+                self.api_url, headers=headers, json=data, proxies=self._get_proxies()
+            )
             response.raise_for_status()
 
             result = response.json()
@@ -99,7 +115,9 @@ class LLMClient:
             }
 
             url = f"{self.api_url}?key={self.api_key}"
-            response = requests.post(url, headers=headers, json=data)
+            response = requests.post(
+                url, headers=headers, json=data, proxies=self._get_proxies()
+            )
             response.raise_for_status()
 
             result = response.json()
@@ -126,7 +144,9 @@ class LLMClient:
             }
 
             url = f"{self.api_url}?key={self.api_key}"
-            response = requests.post(url, headers=headers, json=data)
+            response = requests.post(
+                url, headers=headers, json=data, proxies=self._get_proxies()
+            )
             response.raise_for_status()
 
             result = response.json()

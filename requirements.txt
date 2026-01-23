@@ -5,3 +5,4 @@ wechatpy
 apscheduler
 redis
 python-dotenv
+flask

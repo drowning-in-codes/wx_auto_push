@@ -8,8 +8,8 @@ config.json
 cache/
 
 # Docker相关
-Dockerfile
-docker-compose.yml
+# Dockerfile
+# docker-compose.yml
 
 # Python相关
 __pycache__/

@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  wx_auto_push:
+    build: .
+    container_name: wx_auto_push
+    restart: unless-stopped
+    environment:
+      - CACHE_TYPE=${CACHE_TYPE:-local}
+    volumes:
+      - ./cache:/app/cache
+      - ./config.json:/app/config.json
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:6-alpine
+    container_name: wx_auto_push_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

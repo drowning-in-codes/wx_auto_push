@@ -52,6 +52,51 @@ class Config:
             if "wechat" not in config:
                 config["wechat"] = {}
             config["wechat"]["template_id"] = os.getenv("WECHAT_TEMPLATE_ID")
+        # 微信预览配置
+        if os.getenv("WECHAT_PREVIEW_ENABLED"):
+            if "wechat" not in config:
+                config["wechat"] = {}
+            if "preview" not in config["wechat"]:
+                config["wechat"]["preview"] = {}
+            config["wechat"]["preview"]["enabled"] = (
+                os.getenv("WECHAT_PREVIEW_ENABLED").lower() == "true"
+            )
+        if os.getenv("WECHAT_PREVIEW_TOWXNAME"):
+            if "wechat" not in config:
+                config["wechat"] = {}
+            if "preview" not in config["wechat"]:
+                config["wechat"]["preview"] = {}
+            config["wechat"]["preview"]["towxname"] = os.getenv(
+                "WECHAT_PREVIEW_TOWXNAME"
+            )
+
+        # 微信回调配置
+        if os.getenv("WECHAT_TOKEN"):
+            if "wechat" not in config:
+                config["wechat"] = {}
+            config["wechat"]["token"] = os.getenv("WECHAT_TOKEN")
+        if os.getenv("WECHAT_CALLBACK_ENABLED"):
+            if "wechat" not in config:
+                config["wechat"] = {}
+            if "callback" not in config["wechat"]:
+                config["wechat"]["callback"] = {}
+            config["wechat"]["callback"]["enabled"] = (
+                os.getenv("WECHAT_CALLBACK_ENABLED").lower() == "true"
+            )
+        if os.getenv("WECHAT_CALLBACK_HOST"):
+            if "wechat" not in config:
+                config["wechat"] = {}
+            if "callback" not in config["wechat"]:
+                config["wechat"]["callback"] = {}
+            config["wechat"]["callback"]["host"] = os.getenv("WECHAT_CALLBACK_HOST")
+        if os.getenv("WECHAT_CALLBACK_PORT"):
+            if "wechat" not in config:
+                config["wechat"] = {}
+            if "callback" not in config["wechat"]:
+                config["wechat"]["callback"] = {}
+            config["wechat"]["callback"]["port"] = int(
+                os.getenv("WECHAT_CALLBACK_PORT")
+            )
 
         # 大模型配置
         if os.getenv("LLM_ENABLED"):
@@ -104,6 +149,26 @@ class Config:
                 "end": os.getenv("TIME_RANGE_END"),
             }
 
+        # 代理配置
+        if os.getenv("PROXY_ENABLED"):
+            if "proxy" not in config:
+                config["proxy"] = {}
+            config["proxy"]["enabled"] = os.getenv("PROXY_ENABLED").lower() == "true"
+        if os.getenv("HTTP_PROXY"):
+            if "proxy" not in config:
+                config["proxy"] = {}
+            config["proxy"]["http_proxy"] = os.getenv("HTTP_PROXY")
+        if os.getenv("HTTPS_PROXY"):
+            if "proxy" not in config:
+                config["proxy"] = {}
+            config["proxy"]["https_proxy"] = os.getenv("HTTPS_PROXY")
+
+        # 推送配置
+        if os.getenv("IMAGE_PUBLISH_TYPE"):
+            if "push" not in config:
+                config["push"] = {}
+            config["push"]["image_publish_type"] = os.getenv("IMAGE_PUBLISH_TYPE")
+
     def get(self, key, default=None):
         keys = key.split(".")
         value = self.config
@@ -133,3 +198,6 @@ class Config:
 
     def get_push_config(self):
         return self.get("push", {})
+
+    def get_proxy_config(self):
+        return self.get("proxy", {})

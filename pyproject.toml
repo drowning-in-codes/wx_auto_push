@@ -1,0 +1,15 @@
+[project]
+name = "wx-auto-push"
+version = "0.1.0"
+description = "微信公众号自动推送程序，支持定时推送动漫新闻和图片"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "requests",
+    "beautifulsoup4",
+    "lxml",
+    "wechatpy",
+    "apscheduler",
+    "redis",
+    "python-dotenv"
+]

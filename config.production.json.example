@@ -2,7 +2,43 @@
   "wechat": {
     "app_id": "",
     "app_secret": "",
-    "template_id": ""
+    "template_id": "",
+    "token": "wechat_auto_push",
+    "callback": {
+      "enabled": true,
+      "host": "0.0.0.0",
+      "port": 80
+    },
+    "menu": {
+      "enabled": true,
+      "button": [
+        {
+          "type": "click",
+          "name": "今日新闻",
+          "key": "today_news"
+        },
+        {
+          "name": "图片",
+          "sub_button": [
+            {
+              "type": "click",
+              "name": "动漫图片",
+              "key": "anime_images"
+            },
+            {
+              "type": "click",
+              "name": "随机图片",
+              "key": "random_images"
+            }
+          ]
+        },
+        {
+          "type": "view",
+          "name": "官网",
+          "url": "https://www.example.com"
+        }
+      ]
+    }
   },
   "data_sources": {
     "anime": [
@@ -42,6 +78,12 @@
   },
   "push": {
     "content_types": ["text", "image"],
-    "max_retry": 3
+    "max_retry": 3,
+    "image_publish_type": "image" // 可选值：image（图片消息）或 news（图文消息）
+  },
+  "proxy": {
+    "enabled": false,
+    "http_proxy": "http://localhost:7890",
+    "https_proxy": "http://localhost:7890"
   }
 }
