@@ -1,0 +1,135 @@
+import json
+import os
+from dotenv import load_dotenv
+
+
+class Config:
+    def __init__(self, config_path="config.json"):
+        # 加载环境变量
+        load_dotenv()
+        load_dotenv(".env.local")
+
+        # 根据环境加载不同的配置文件
+        env = os.getenv("NODE_ENV", "development")
+        if env == "production":
+            env_config_path = "config.production.json"
+        else:
+            env_config_path = "config.development.json"
+
+        # 优先使用环境特定的配置文件
+        if os.path.exists(env_config_path):
+            self.config_path = env_config_path
+        else:
+            self.config_path = config_path
+
+        self.config = self._load_config()
+
+    def _load_config(self):
+        """加载配置文件，并从环境变量覆盖"""
+        # 加载文件配置
+        config = {}
+        if os.path.exists(self.config_path):
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+
+        # 从环境变量覆盖配置
+        self._override_from_env(config)
+
+        return config
+
+    def _override_from_env(self, config):
+        """从环境变量覆盖配置"""
+        # 微信配置
+        if os.getenv("WECHAT_APP_ID"):
+            if "wechat" not in config:
+                config["wechat"] = {}
+            config["wechat"]["app_id"] = os.getenv("WECHAT_APP_ID")
+        if os.getenv("WECHAT_APP_SECRET"):
+            if "wechat" not in config:
+                config["wechat"] = {}
+            config["wechat"]["app_secret"] = os.getenv("WECHAT_APP_SECRET")
+        if os.getenv("WECHAT_TEMPLATE_ID"):
+            if "wechat" not in config:
+                config["wechat"] = {}
+            config["wechat"]["template_id"] = os.getenv("WECHAT_TEMPLATE_ID")
+
+        # 大模型配置
+        if os.getenv("LLM_ENABLED"):
+            if "llm" not in config:
+                config["llm"] = {}
+            config["llm"]["enabled"] = os.getenv("LLM_ENABLED").lower() == "true"
+        if os.getenv("LLM_MODEL"):
+            if "llm" not in config:
+                config["llm"] = {}
+            config["llm"]["model"] = os.getenv("LLM_MODEL")
+
+        # OpenAI配置
+        if os.getenv("OPENAI_API_KEY"):
+            if "llm" not in config:
+                config["llm"] = {}
+            if "openai" not in config["llm"]:
+                config["llm"]["openai"] = {}
+            config["llm"]["openai"]["api_key"] = os.getenv("OPENAI_API_KEY")
+        if os.getenv("OPENAI_API_URL"):
+            if "llm" not in config:
+                config["llm"] = {}
+            if "openai" not in config["llm"]:
+                config["llm"]["openai"] = {}
+            config["llm"]["openai"]["api_url"] = os.getenv("OPENAI_API_URL")
+
+        # Gemini配置
+        if os.getenv("GEMINI_API_KEY"):
+            if "llm" not in config:
+                config["llm"] = {}
+            if "gemini" not in config["llm"]:
+                config["llm"]["gemini"] = {}
+            config["llm"]["gemini"]["api_key"] = os.getenv("GEMINI_API_KEY")
+        if os.getenv("GEMINI_API_URL"):
+            if "llm" not in config:
+                config["llm"] = {}
+            if "gemini" not in config["llm"]:
+                config["llm"]["gemini"] = {}
+            config["llm"]["gemini"]["api_url"] = os.getenv("GEMINI_API_URL")
+
+        # 调度配置
+        if os.getenv("WEEKLY_FREQUENCY"):
+            if "schedule" not in config:
+                config["schedule"] = {}
+            config["schedule"]["weekly_frequency"] = int(os.getenv("WEEKLY_FREQUENCY"))
+        if os.getenv("TIME_RANGE_START") and os.getenv("TIME_RANGE_END"):
+            if "schedule" not in config:
+                config["schedule"] = {}
+            config["schedule"]["time_range"] = {
+                "start": os.getenv("TIME_RANGE_START"),
+                "end": os.getenv("TIME_RANGE_END"),
+            }
+
+    def get(self, key, default=None):
+        keys = key.split(".")
+        value = self.config
+
+        for k in keys:
+            if isinstance(value, dict) and k in value:
+                value = value[k]
+            else:
+                return default
+
+        return value
+
+    def get_wechat_config(self):
+        return self.get("wechat", {})
+
+    def get_anime_sources(self):
+        return self.get("data_sources.anime", [])
+
+    def get_image_sources(self):
+        return self.get("data_sources.images", [])
+
+    def get_llm_config(self):
+        return self.get("llm", {})
+
+    def get_schedule_config(self):
+        return self.get("schedule", {})
+
+    def get_push_config(self):
+        return self.get("push", {})

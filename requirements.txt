@@ -1,0 +1,7 @@
+requests
+beautifulsoup4
+lxml
+wechatpy
+apscheduler
+redis
+python-dotenv

@@ -1,0 +1,23 @@
+# 配置文件
+config.json
+.env
+.env.local
+.env.production
+
+# 缓存目录
+cache/
+
+# Docker相关
+Dockerfile
+docker-compose.yml
+
+# Python相关
+__pycache__/
+*.pyc
+
+# IDE相关
+.vscode/
+.idea/
+
+# 日志文件
+*.log
