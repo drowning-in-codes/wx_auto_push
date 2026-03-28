@@ -71,7 +71,6 @@ wx_auto_push/
 ### 方法1：使用pip安装
 
 1. 克隆项目到本地
-
 2. 安装依赖包：
    ```bash
    pip install -r requirements.txt
@@ -80,22 +79,18 @@ wx_auto_push/
 ### 方法2：使用uv安装（推荐）
 
 1. 克隆项目到本地
-
 2. 安装uv（如果未安装）：
    ```bash
    pip install uv
    ```
-
 3. 初始化并安装依赖：
    ```bash
    uv sync
    ```
-
 4. 配置环境变量：
    - 复制 `.env.example` 文件为 `.env`
    - 填写微信公众号的 `WECHAT_APP_ID` 和 `WECHAT_APP_SECRET`
    - 其他配置项可根据需要修改
-
 5. 配置 `config.json` 文件（可选）：
    - 配置数据源 URL
    - 设置大模型 API 配置（可选）
@@ -108,6 +103,7 @@ wx_auto_push/
 ### 配置文件结构
 
 项目支持三种配置文件：
+
 - `config.development.json` - 开发环境配置
 - `config.production.json` - 生产环境配置
 - `config.json` - 默认配置
@@ -240,6 +236,7 @@ wx_auto_push/
 ```
 
 菜单类型支持：
+
 - `click` - 点击推事件
 - `view` - 跳转URL
 - `scancode_push` - 扫码推事件
@@ -324,6 +321,7 @@ uv run python main.py schedule [time|frequency|view|run|run-once] [args]
 ```
 
 **参数说明：**
+
 - `time`：设置推送时间范围
   - `--start`：开始时间，格式 HH:MM，默认 08:00
   - `--end`：结束时间，格式 HH:MM，默认 20:00
@@ -375,7 +373,7 @@ uv run python main.py config [menu|set]
 ```
 
 - `config menu`：根据配置文件创建自定义菜单
-- `config set`：设置微信公众号配置，包括 app_id、app_secret 等
+- `config set`：设置微信公众号配置，包括 app\_id、app\_secret 等
 
 ### 8. 永久素材管理
 
@@ -402,13 +400,15 @@ uv run python main.py material <subcommand> [args]
 ```
 
 **参数说明：**
+
 - `<type>`: 素材类型，可选值：image（图片）、voice（语音）、video（视频）、thumb（缩略图）和 news（图文）
 - `<file_path>`: 素材文件路径
 - `<title>`: 视频素材标题（仅视频类型需要）
 - `<description>`: 视频素材简介（仅视频类型需要）
-- `<media_id>`: 素材的media_id
+- `<media_id>`: 素材的media\_id
 
 **注意事项：**
+
 - 永久素材保存总数量有上限：图文消息素材、图片素材上限为100000，其他类型为1000
 - 素材的格式大小等要求与公众平台官网一致
 
@@ -428,24 +428,26 @@ uv run python main.py material temporary <subcommand> [args]
 ```
 
 **参数说明：**
+
 - `<type>`: 素材类型，可选值：image（图片）、voice（语音）、video（视频）和 thumb（缩略图）
 - `<file_path>`: 素材文件路径
-- `<media_id>`: 素材的media_id
+- `<media_id>`: 素材的media\_id
 
 **注意事项：**
-- 临时素材保存时间为3天，3天后media_id失效
+
+- 临时素材保存时间为3天，3天后media\_id失效
 - 临时素材不占用素材库数量限制
 
 ### 素材类型说明
 
-| 类型    | 描述                 | 限制条件                                                                 |
-|---------|----------------------|--------------------------------------------------------------------------|
-| image   | 图片素材             | 10M，支持bmp/png/jpeg/jpg/gif格式                                        |
-| voice   | 语音素材             | 2M，播放长度不超过60s，mp3/wma/wav/amr格式                                |
-| video   | 视频素材             | 10MB，支持MP4格式，需要提供title和description                            |
-| thumb   | 缩略图素材           | 64KB，支持JPG格式                                                       |
-| news    | 图文素材             | 需通过其他接口创建，不支持直接上传                                       |
-| newsimg | 图文消息内图片       | 1MB以下，仅支持jpg/png格式，不占用素材库数量限制                          |
+| 类型      | 描述      | 限制条件                               |
+| ------- | ------- | ---------------------------------- |
+| image   | 图片素材    | 10M，支持bmp/png/jpeg/jpg/gif格式       |
+| voice   | 语音素材    | 2M，播放长度不超过60s，mp3/wma/wav/amr格式    |
+| video   | 视频素材    | 10MB，支持MP4格式，需要提供title和description |
+| thumb   | 缩略图素材   | 64KB，支持JPG格式                       |
+| news    | 图文素材    | 需通过其他接口创建，不支持直接上传                  |
+| newsimg | 图文消息内图片 | 1MB以下，仅支持jpg/png格式，不占用素材库数量限制      |
 
 ### 永久素材管理命令示例
 
@@ -509,6 +511,7 @@ uv run python main.py pixivision [list|detail|ranking|recommendations|push|downl
 ```
 
 **参数说明：**
+
 - `list`：获取插画列表
   - `--start-page`：可选参数，开始页码，默认1
   - `--end-page`：可选参数，结束页码，默认1
@@ -534,6 +537,7 @@ uv run python main.py pixivision [list|detail|ranking|recommendations|push|downl
   - `--limit`：可选参数，返回数量限制，默认10
 
 **下载功能：**
+
 - 支持多线程下载（可配置线程数，默认5个）
 - 支持失败重试（可配置重试次数，默认3次）
 - 使用插画标题作为文件夹名称
@@ -544,6 +548,7 @@ uv run python main.py pixivision [list|detail|ranking|recommendations|push|downl
   - `directory`: 下载目录，默认 "./downloads"
 
 **图片压缩功能：**
+
 - 上传图片时会自动检查文件大小
 - 超过阈值的图片会自动压缩（默认阈值1MB）
 - 压缩过程会调整图片尺寸（最大边长2000像素）和质量（85%）
@@ -555,6 +560,7 @@ uv run python main.py pixivision [list|detail|ranking|recommendations|push|downl
   - `quality`: JPEG 压缩质量（1-100），默认 85
 
 **存储功能：**
+
 - 默认使用 JSON 存储，数据保存在 `data/illustrations.json` 文件中
 - 支持 SQLite 数据库存储，可在初始化时指定 `storage_type='database'`
 - 存储的信息包括：标题、文章ID、URL、描述、图片列表、标签、分类、缩略图等
@@ -571,13 +577,12 @@ uv run python main.py pixivision [list|detail|ranking|recommendations|push|downl
 草稿箱开关设置用于开启或查询草稿箱和发布功能的开关状态。详细文档请参考：[草稿箱开关设置](https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_switch.html)
 
 **注意事项：**
+
 - 此接口应在服务器端调用，不可在前端（小程序、网页、APP等）直接调用
 - 内测期间会逐步放量，任何用户都可能会自动打开
 - 此开关开启后不可逆，换言之，无法从开启的状态回到关闭
 - 内测期间，无论开关开启与否，旧版的图文素材API，以及新版的草稿箱、发布等API均可以正常使用
 - 在内测结束之后，所有用户都将自动开启，即草稿箱、发布等功能将对所有用户开放
-
-
 
 **命令示例：**
 
@@ -626,15 +631,15 @@ python main.py draft create 11525 \
 
 **参数说明：**
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `source` | 图片来源：本地文件夹路径或 Pixivision 文章ID | 必填 |
-| `--title` | 草稿标题，默认使用文件夹名或插画标题 | 自动获取 |
-| `--author` | 作者名称，默认使用配置中的 `default_author` | 配置值 |
-| `--compress` | 是否压缩图片 | 使用配置 |
-| `--digest` | 图文消息摘要 | 自动生成 |
-| `--content` | 图文消息内容（支持HTML） | 自动生成 |
-| `--show-cover` | 是否显示封面：1显示，0不显示 | 1 |
+| 参数               | 说明                                | 默认值    |
+| ---------------- | --------------------------------- | ------ |
+| `source`         | 图片来源：本地文件夹路径或 Pixivision 文章ID     | 必填     |
+| `--title`        | 草稿标题，默认使用文件夹名或插画标题                | 自动获取   |
+| `--author`       | 作者名称，默认使用配置中的 `default_author`    | 配置值    |
+| `--compress`     | 是否压缩图片                            | 使用配置   |
+| `--digest`       | 图文消息摘要                            | 自动生成   |
+| `--content`      | 图文消息内容（支持HTML）                    | 自动生成   |
+| `--show-cover`   | 是否显示封面：1显示，0不显示                   | 1      |
 | `--message-type` | 消息类型：`news`(图文消息)或`newspic`(图片消息) | `news` |
 
 **配置项：**
@@ -682,7 +687,9 @@ python main.py draft submit <media_id>
 ```
 
 # 使用uv
-uv run python main.py draft <subcommand> [args]
+
+uv run python main.py draft <subcommand> \[args]
+
 ```
 
 **参数说明：**
@@ -887,3 +894,5 @@ uv run python main.py draft <subcommand> [args]
 ## 许可证
 
 本项目采用 MIT 许可证，详情请参阅 LICENSE 文件。
+```
+
