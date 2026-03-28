@@ -1,17 +1,16 @@
 import random
 import requests
 from bs4 import BeautifulSoup
+import time
+import os
+
 
 
 class BaseCrawler:
     def __init__(self, urls, proxy_config=None):
         self.urls = urls
         self.proxy_config = proxy_config or {}
-        # 创建 Session 并配置代理设置
-        self.session = requests.Session()
-        # 如果代理未启用，禁用系统环境变量中的代理设置
-        if not self.proxy_config.get("enabled"):
-            self.session.trust_env = False
+       
 
     def get_random_url(self):
         return random.choice(self.urls)
@@ -25,12 +24,15 @@ class BaseCrawler:
                 "http": self.proxy_config.get("http_proxy"),
                 "https": self.proxy_config.get("https_proxy"),
             }
+        # 如果代理未启用，清空环境变量
+        os.environ["HTTP_PROXY"] = ""
+        os.environ["HTTPS_PROXY"] = ""
         return None
 
     def crawl(self):
         url = self.get_random_url()
         try:
-            response = self.session.get(
+            response = requests.get(
                 url, headers=self._get_headers(), proxies=self._get_proxies()
             )
             response.raise_for_status()

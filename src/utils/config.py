@@ -203,5 +203,114 @@ class Config:
     def get_push_config(self):
         return self.get("push", {})
 
+    def get_content_weights(self):
+        """
+        获取推送类型权重配置
+        :return: 推送类型权重字典，例如 {"text": 1, "image": 1}
+        """
+        push_config = self.get("push", {})
+        return push_config.get("content_weights", {"text": 1, "image": 1})
+
     def get_proxy_config(self):
         return self.get("proxy", {})
+
+    def get_request_config(self):
+        """
+        获取请求配置
+        :return: 请求配置字典
+        """
+        return self.get(
+            "request",
+            {
+                "delay": 1,
+            },
+        )
+
+    def get_download_config(self):
+        """
+        获取下载配置
+        :return: 下载配置字典
+        """
+        return self.get(
+            "download",
+            {
+                "max_workers": 5,
+                "max_retries": 3,
+                "directory": "./downloads",
+            },
+        )
+
+    def get_download_directory(self):
+        """
+        获取下载目录
+        :return: 下载目录路径
+        """
+        download_config = self.get_download_config()
+        return download_config.get("directory", "./downloads")
+
+    def get_image_compression_config(self):
+        """
+        获取图片压缩配置
+        :return: 图片压缩配置字典
+        """
+        return self.get(
+            "image_compression",
+            {
+                "enabled": True,
+                "max_size": 1048576,  # 1MB
+                "max_dimension": 2000,
+                "quality": 85,
+            },
+        )
+
+    def get_draft_config(self):
+        """
+        获取草稿配置
+        :return: 草稿配置字典
+        """
+        return self.get(
+            "draft",
+            {
+                "default_author": "公众号作者",
+                "default_material_type": "temporary",
+                "default_show_cover": 1,
+            },
+        )
+
+    def set(self, key, value):
+        """
+        设置配置值
+        """
+        keys = key.split(".")
+        config = self.config
+
+        # 导航到目标键的父级
+        for k in keys[:-1]:
+            if k not in config:
+                config[k] = {}
+            config = config[k]
+
+        # 设置值
+        config[keys[-1]] = value
+
+        # 保存配置到文件
+        self._save_config()
+
+    def _save_config(self):
+        """
+        保存配置到文件
+        """
+        with open(self.config_path, "w", encoding="utf-8") as f:
+            json.dump(self.config, f, indent=2, ensure_ascii=False)
+
+    def set_push_time_range(self, start, end):
+        """
+        设置推送时间范围
+        """
+        self.set("schedule.time_range", {"start": start, "end": end})
+
+    def set_weekly_push_frequency(self, frequency):
+        """
+        设置每周推送频率
+        """
+        self.set("schedule.weekly_frequency", frequency)

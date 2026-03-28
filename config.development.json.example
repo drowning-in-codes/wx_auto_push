@@ -89,5 +89,16 @@
     "enabled": false,
     "http_proxy": "http://localhost:7890",
     "https_proxy": "http://localhost:7890"
+  },
+  "image_compression": {
+    "enabled": true,
+    "max_size": 1048576,
+    "max_dimension": 2000,
+    "quality": 85
+  },
+  "draft": {
+    "default_author": "proanimer",
+    "default_material_type": "temporary",
+    "default_show_cover": 1
   }
 }

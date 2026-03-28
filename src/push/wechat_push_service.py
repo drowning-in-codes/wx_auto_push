@@ -2,6 +2,7 @@ from .wechat_client import WeChatClient
 from .wechat_menu_service import WeChatMenuService
 from .wechat_material_service import WeChatMaterialService
 from .wechat_publish_service import WeChatPublishService
+from .wechat_draft_service import WeChatDraftService
 import random
 
 
@@ -23,6 +24,7 @@ class WeChatPushService:
         self.menu_service = WeChatMenuService(self.client)
         self.material_service = WeChatMaterialService(self.client)
         self.publish_service = WeChatPublishService(self.client)
+        self.draft_service = WeChatDraftService(self.client)
 
     def push_text_content(self, content, is_to_all=True, tag_id=None, clientmsgid=None):
         """
@@ -191,3 +193,33 @@ class WeChatPushService:
             return self.client.preview_message("mpnews", media_id, towxname)
         else:
             raise Exception(f"上传图文消息素材失败: {upload_result}")
+
+    def send_image_message(self, image_path):
+        """
+        发送本地图片消息
+        """
+        # 上传本地图片获取media_id
+        upload_result = self.material_service.upload_local_image_media(image_path)
+        if "media_id" in upload_result:
+            media_id = upload_result["media_id"]
+            return self.client.mass_send_image(media_id)
+        else:
+            raise Exception(f"上传图片失败: {upload_result}")
+
+    def send_image_message_from_url(self, image_url):
+        """
+        从URL发送图片消息
+        """
+        # 上传网络图片获取media_id
+        upload_result = self.material_service.upload_image_media(image_url)
+        if "media_id" in upload_result:
+            media_id = upload_result["media_id"]
+            return self.client.mass_send_image(media_id)
+        else:
+            raise Exception(f"上传图片失败: {upload_result}")
+
+    def send_text_message(self, content):
+        """
+        发送文本消息
+        """
+        return self.client.mass_send_text(content)

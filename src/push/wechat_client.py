@@ -16,6 +16,13 @@ class WeChatClient:
         self.proxy_config = proxy_config or {}
 
     def get_access_token(self):
+        """
+        [Deprecated] 获取access_token（旧接口）
+        推荐使用 get_stable_access_token() 方法
+        """
+        print(
+            "警告: get_access_token() 方法已过时，推荐使用 get_stable_access_token() 方法"
+        )
         # 尝试从缓存获取
         cached_token = self.cache.get("wechat_access_token")
         if cached_token:
@@ -51,6 +58,62 @@ class WeChatClient:
         else:
             raise Exception(f"获取access_token失败: {result}")
 
+    def get_stable_access_token(self, force_refresh=False):
+        """
+        获取稳定版access_token
+        参考文档：https://developers.weixin.qq.com/doc/subscription/api/base/api_getstableaccesstoken.html
+
+        参数:
+            force_refresh: 是否强制刷新，默认False
+
+        返回:
+            access_token: 稳定版接口调用凭据
+        """
+        # 尝试从缓存获取
+        cached_token = self.cache.get("wechat_stable_access_token")
+        if cached_token:
+            self.access_token = cached_token["access_token"]
+            self.token_expire_time = cached_token["expire_at"]
+            return self.access_token
+
+        current_time = time.time()
+        if (
+            self.access_token
+            and current_time < self.token_expire_time
+            and not force_refresh
+        ):
+            return self.access_token
+
+        url = f"{self.base_url}/cgi-bin/stable_token"
+        data = {
+            "grant_type": "client_credential",
+            "appid": self.app_id,
+            "secret": self.app_secret,
+            "force_refresh": force_refresh,
+        }
+        response = self._request("POST", url, json=data)
+        result = response.json()
+
+        if "access_token" in result:
+            self.access_token = result["access_token"]
+            self.token_expire_time = (
+                current_time + result["expires_in"] - 3600
+            )  # 提前1小时刷新
+
+            # 存入缓存
+            self.cache.set(
+                "wechat_stable_access_token",
+                {
+                    "access_token": self.access_token,
+                    "expire_at": self.token_expire_time,
+                },
+                expire=result["expires_in"] - 3600,
+            )
+
+            return self.access_token
+        else:
+            raise Exception(f"获取稳定版access_token失败: {result}")
+
     def _request(self, method, url, **kwargs):
         """
         统一请求发送方法，用于处理所有微信API请求
@@ -74,7 +137,7 @@ class WeChatClient:
                 "https": self.proxy_config.get("https_proxy"),
             }
         else:
-            # 显式禁用代理，确保不使用系统环境中的代理
+            # 显式禁用代理，覆盖系统环境中的代理配置
             proxies = {"http": None, "https": None}
         kwargs["proxies"] = proxies
 
@@ -83,13 +146,13 @@ class WeChatClient:
         return response
 
     def create_menu(self, menu_data):
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/menu/create?access_token={access_token}"
         response = self._request("POST", url, json=menu_data)
         return response.json()
 
     def upload_media(self, media_type, media_file):
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/media/upload?access_token={access_token}&type={media_type}"
 
         files = {"media": open(media_file, "rb")}
@@ -98,7 +161,7 @@ class WeChatClient:
         return response.json()
 
     def send_article(self, articles):
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/message/custom/send?access_token={access_token}"
 
         data = {
@@ -111,7 +174,7 @@ class WeChatClient:
         return response.json()
 
     def send_template_message(self, openid, template_id, data, url=None):
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         api_url = (
             f"{self.base_url}/cgi-bin/message/template/send?access_token={access_token}"
         )
@@ -127,8 +190,10 @@ class WeChatClient:
     def upload_news_media(self, articles):
         """
         上传图文消息素材，返回media_id
+        接口：cgi-bin/media/uploadnews
+        说明：本接口用于上传图文消息，该能力已更新为草稿箱
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/media/uploadnews?access_token={access_token}"
 
         data = {"articles": articles}
@@ -143,7 +208,7 @@ class WeChatClient:
         import tempfile
         import shutil
 
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         upload_url = f"{self.base_url}/cgi-bin/media/upload?access_token={access_token}&type=image"
 
         # 下载图片到临时文件
@@ -172,7 +237,7 @@ class WeChatClient:
         注意：该接口所上传的图片，不占用公众号的素材库中图片数量的100000个的限制
              图片仅支持jpg/png格式，大小必须在1MB以下
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/media/uploadimg?access_token={access_token}"
 
         with open(image_file, "rb") as f:
@@ -189,7 +254,7 @@ class WeChatClient:
         import tempfile
         import shutil
 
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         upload_url = (
             f"{self.base_url}/cgi-bin/media/uploadimg?access_token={access_token}"
         )
@@ -218,7 +283,7 @@ class WeChatClient:
         """
         预览消息
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = (
             f"{self.base_url}/cgi-bin/message/mass/preview?access_token={access_token}"
         )
@@ -239,7 +304,7 @@ class WeChatClient:
         """
         查询群发消息发送状态
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/message/mass/get?access_token={access_token}"
 
         data = {"msg_id": msg_id}
@@ -250,7 +315,7 @@ class WeChatClient:
         """
         删除群发消息
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/message/mass/delete?access_token={access_token}"
 
         data = {"msg_id": msg_id}
@@ -261,7 +326,7 @@ class WeChatClient:
         """
         群发文本消息
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = (
             f"{self.base_url}/cgi-bin/message/mass/sendall?access_token={access_token}"
         )
@@ -286,7 +351,7 @@ class WeChatClient:
         """
         群发图片消息
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = (
             f"{self.base_url}/cgi-bin/message/mass/sendall?access_token={access_token}"
         )
@@ -313,7 +378,7 @@ class WeChatClient:
         """
         群发图文消息
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = (
             f"{self.base_url}/cgi-bin/message/mass/sendall?access_token={access_token}"
         )
@@ -342,7 +407,7 @@ class WeChatClient:
         """
         根据OpenID列表群发消息
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/message/mass/send?access_token={access_token}"
 
         data = {
@@ -371,7 +436,7 @@ class WeChatClient:
         """
         创建自定义菜单
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/menu/create?access_token={access_token}"
         response = self._request("POST", url, json=menu_data)
         return response.json()
@@ -380,7 +445,7 @@ class WeChatClient:
         """
         查询自定义菜单信息
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/get_current_selfmenu_info?access_token={access_token}"
         response = self._request("GET", url)
         return response.json()
@@ -389,7 +454,7 @@ class WeChatClient:
         """
         获取自定义菜单配置
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/menu/get?access_token={access_token}"
         response = self._request("GET", url)
         return response.json()
@@ -398,7 +463,7 @@ class WeChatClient:
         """
         删除自定义菜单
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/menu/delete?access_token={access_token}"
         response = self._request("GET", url)
         return response.json()
@@ -407,7 +472,7 @@ class WeChatClient:
         """
         创建个性化菜单
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/menu/addconditional?access_token={access_token}"
         response = self._request("POST", url, json=menu_data)
         return response.json()
@@ -416,7 +481,7 @@ class WeChatClient:
         """
         删除个性化菜单
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/menu/delconditional?access_token={access_token}"
         data = {"menuid": menu_id}
         response = self._request("POST", url, json=data)
@@ -426,7 +491,7 @@ class WeChatClient:
         """
         测试个性化菜单匹配结果
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/menu/trymatch?access_token={access_token}"
         data = {"user_id": user_id}
         response = self._request("POST", url, json=data)
@@ -437,16 +502,27 @@ class WeChatClient:
         """
         获取永久素材总数
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/material/get_materialcount?access_token={access_token}"
         response = self._request("GET", url)
+        return response.json()
+
+    def batch_get_material(self, material_type, offset=0, count=20):
+        """
+        获取永久素材列表
+        参考文档：https://developers.weixin.qq.com/doc/subscription/api/material/permanent/api_batchgetmaterial.html
+        """
+        access_token = self.get_stable_access_token()
+        url = f"{self.base_url}/cgi-bin/material/batchget_material?access_token={access_token}"
+        data = {"type": material_type, "offset": offset, "count": count}
+        response = self._request("POST", url, json=data)
         return response.json()
 
     def get_material(self, media_id):
         """
         获取永久素材
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = (
             f"{self.base_url}/cgi-bin/material/get_material?access_token={access_token}"
         )
@@ -454,11 +530,21 @@ class WeChatClient:
         response = self._request("POST", url, json=data)
         return response.json()
 
+    def get_temporary_material(self, media_id):
+        """
+        获取临时素材
+        参考文档：https://developers.weixin.qq.com/doc/subscription/api/material/temporary/api_getmedia.html
+        """
+        access_token = self.get_stable_access_token()
+        url = f"{self.base_url}/cgi-bin/media/get?access_token={access_token}&media_id={media_id}"
+        response = self._request("GET", url)
+        return response
+
     def add_material(self, material_type, media_file, title=None, introduction=None):
         """
         上传永久素材
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/material/add_material?access_token={access_token}&type={material_type}"
 
         files = {"media": open(media_file, "rb")}
@@ -478,7 +564,7 @@ class WeChatClient:
         """
         删除永久素材
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = (
             f"{self.base_url}/cgi-bin/material/del_material?access_token={access_token}"
         )
@@ -491,7 +577,7 @@ class WeChatClient:
         """
         获取临时素材
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/media/get?access_token={access_token}&media_id={media_id}"
         response = self._request("GET", url)
         return response.json()
@@ -499,8 +585,9 @@ class WeChatClient:
     def upload_temp_media(self, material_type, media_file):
         """
         上传临时素材
+        参考文档：https://developers.weixin.qq.com/doc/subscription/api/material/temporary/api_uploadtempmedia.html
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/media/upload?access_token={access_token}&type={material_type}"
 
         files = {"media": open(media_file, "rb")}
@@ -511,7 +598,7 @@ class WeChatClient:
         """
         获取高清语音素材
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/media/get/jssdk?access_token={access_token}&media_id={media_id}"
         response = self._request("GET", url)
         return response.json()
@@ -521,7 +608,7 @@ class WeChatClient:
         """
         获取已发布的消息列表
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = (
             f"{self.base_url}/cgi-bin/freepublish/batchget?access_token={access_token}"
         )
@@ -533,7 +620,7 @@ class WeChatClient:
         """
         获取已发布的图文信息
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/freepublish/getarticle?access_token={access_token}"
         data = {"article_id": article_id}
         response = self._request("POST", url, json=data)
@@ -543,7 +630,7 @@ class WeChatClient:
         """
         删除发布文章
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/freepublish/delete?access_token={access_token}"
         data = {"article_id": article_id, "index": index}
         response = self._request("POST", url, json=data)
@@ -553,7 +640,7 @@ class WeChatClient:
         """
         发布状态查询
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/freepublish/get?access_token={access_token}"
         data = {"publish_id": publish_id}
         response = self._request("POST", url, json=data)
@@ -563,8 +650,84 @@ class WeChatClient:
         """
         发布草稿
         """
-        access_token = self.get_access_token()
+        access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/freepublish/submit?access_token={access_token}"
         data = {"media_id": media_id}
+        response = self._request("POST", url, json=data)
+        return response.json()
+
+    # 草稿管理相关方法
+    def draft_switch(self, checkonly=0):
+        """
+        草稿箱开关设置
+        参考文档：https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_switch.html
+        """
+        access_token = self.get_stable_access_token()
+        url = f"{self.base_url}/cgi-bin/draft/switch?access_token={access_token}&checkonly={checkonly}"
+        response = self._request("POST", url)
+        return response.json()
+
+    def draft_add(self, articles):
+        """
+        新增草稿
+        参考文档：https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_add.html
+        """
+        access_token = self.get_stable_access_token()
+        url = f"{self.base_url}/cgi-bin/draft/add?access_token={access_token}"
+        data = {"articles": articles}
+        response = self._request("POST", url, json=data)
+        return response.json()
+
+    def draft_batchget(self, offset=0, count=10, no_content=0):
+        """
+        获取草稿列表
+        参考文档：https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_batchget.html
+        """
+        access_token = self.get_stable_access_token()
+        url = f"{self.base_url}/cgi-bin/draft/batchget?access_token={access_token}"
+        data = {"offset": offset, "count": count, "no_content": no_content}
+        response = self._request("POST", url, json=data)
+        return response.json()
+
+    def draft_count(self):
+        """
+        获取草稿的总数
+        参考文档：https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_count.html
+        """
+        access_token = self.get_stable_access_token()
+        url = f"{self.base_url}/cgi-bin/draft/count?access_token={access_token}"
+        response = self._request("POST", url)
+        return response.json()
+
+    def draft_delete(self, media_id):
+        """
+        删除草稿
+        参考文档：https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_delete.html
+        """
+        access_token = self.get_stable_access_token()
+        url = f"{self.base_url}/cgi-bin/draft/delete?access_token={access_token}"
+        data = {"media_id": media_id}
+        response = self._request("POST", url, json=data)
+        return response.json()
+
+    def get_draft(self, media_id):
+        """
+        获取草稿详情
+        参考文档：https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_getdraft.html
+        """
+        access_token = self.get_stable_access_token()
+        url = f"{self.base_url}/cgi-bin/draft/get?access_token={access_token}"
+        data = {"media_id": media_id}
+        response = self._request("POST", url, json=data)
+        return response.json()
+
+    def draft_update(self, media_id, index, articles):
+        """
+        更新草稿
+        参考文档：https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_update.html
+        """
+        access_token = self.get_stable_access_token()
+        url = f"{self.base_url}/cgi-bin/draft/update?access_token={access_token}"
+        data = {"media_id": media_id, "index": index, "articles": articles}
         response = self._request("POST", url, json=data)
         return response.json()

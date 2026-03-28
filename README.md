@@ -1,6 +1,7 @@
 # 微信公众号自动推送程序
 
 本项目是一个微信公众号自动推送程序，支持从多个数据源爬取内容，包括动漫新闻和图片，并可选择性使用大模型改写内容，最后通过微信公众号自动推送给用户。
+[微信公众号自动推送](./wx_auto_push.png)
 
 ## 功能特性
 
@@ -17,7 +18,7 @@
 - **代理配置**：支持HTTP/HTTPS代理设置，确保网络请求可通过代理路由
 - **立即推送**：支持立即推送指定类型的内容，无需等待调度器
 - **uv构建支持**：使用uv管理依赖和构建项目，提高安装速度
-- **CLI工具化**：支持完整的命令行工具，包括配置管理、登录认证、素材管理等
+- **CLI工具化**：支持完整的命令行工具，包括配置管理、登录认证、永久素材管理等
 - **Pixivision 服务**：支持从 Pixivision 网站爬取插画，包括列表页和详情页解析
 
 ## 项目结构
@@ -44,7 +45,7 @@ wx_auto_push/
     ├── push/              # 推送模块
     │   ├── wechat_client.py
     │   ├── wechat_push_service.py
-    │   ├── wechat_material_service.py  # 素材管理服务
+    │   ├── wechat_material_service.py  # 永久素材管理服务
     │   ├── wechat_menu_service.py      # 菜单管理服务
     │   ├── wechat_publish_service.py   # 发布管理服务
     │   ├── wechat_callback_server.py   # 回调服务器
@@ -298,7 +299,57 @@ python main.py stop
 uv run python main.py stop
 ```
 
-### 5. 登录微信公众号
+### 5. 调度管理
+
+调度管理命令用于配置和运行定时推送任务。
+
+```bash
+# 设置推送时间范围
+python main.py schedule time --start 08:00 --end 20:00
+
+# 设置每周推送频次
+python main.py schedule frequency --weekly-frequency 3
+
+# 查看调度配置
+python main.py schedule view
+
+# 启动调度器（持续运行）
+python main.py schedule run
+
+# 执行一次推送任务后退出
+python main.py schedule run-once
+
+# 使用uv
+uv run python main.py schedule [time|frequency|view|run|run-once] [args]
+```
+
+**参数说明：**
+- `time`：设置推送时间范围
+  - `--start`：开始时间，格式 HH:MM，默认 08:00
+  - `--end`：结束时间，格式 HH:MM，默认 20:00
+- `frequency`：设置每周推送频次
+  - `--weekly-frequency`：每周推送次数，默认 3
+- `view`：查看当前调度配置
+- `run`：启动调度器，持续运行直到手动停止
+- `run-once`：执行一次推送任务后退出
+
+**配置项：**
+
+在 `config.json` 中可以配置调度参数：
+
+```json
+{
+  "schedule": {
+    "weekly_frequency": 3,
+    "time_range": {
+      "start": "08:00",
+      "end": "20:00"
+    }
+  }
+}
+```
+
+### 6. 登录微信公众号
 
 ```bash
 # 使用pip
@@ -310,7 +361,7 @@ uv run python main.py login
 
 该命令用于使用已配置的 appid 和 app secret 获取并存储 access token，如果已有 token 则使用，如果之前的 token 已过期则重新登陆更新。
 
-### 6. 配置微信公众号
+### 7. 配置微信公众号
 
 ```bash
 # 创建自定义菜单
@@ -326,18 +377,18 @@ uv run python main.py config [menu|set]
 - `config menu`：根据配置文件创建自定义菜单
 - `config set`：设置微信公众号配置，包括 app_id、app_secret 等
 
-### 7. 素材管理
+### 8. 永久素材管理
 
-素材管理命令用于管理公众号的永久素材和临时素材，支持获取、上传、删除等操作。
+永久素材管理命令用于管理公众号的永久素材，支持获取、上传、删除等操作。
 
 ```bash
-# 获取素材总数
+# 获取永久素材总数
 python main.py material count
 
-# 列出素材（暂未实现）
-python main.py material list [image|voice|video|thumb]
+# 列出永久素材
+python main.py material list <type>
 
-# 获取指定素材
+# 获取指定永久素材
 python main.py material get <media_id>
 
 # 上传永久素材
@@ -351,7 +402,7 @@ uv run python main.py material <subcommand> [args]
 ```
 
 **参数说明：**
-- `<type>`: 素材类型，可选值：image（图片）、voice（语音）、video（视频）和缩略图（thumb）
+- `<type>`: 素材类型，可选值：image（图片）、voice（语音）、video（视频）、thumb（缩略图）和 news（图文）
 - `<file_path>`: 素材文件路径
 - `<title>`: 视频素材标题（仅视频类型需要）
 - `<description>`: 视频素材简介（仅视频类型需要）
@@ -360,7 +411,30 @@ uv run python main.py material <subcommand> [args]
 **注意事项：**
 - 永久素材保存总数量有上限：图文消息素材、图片素材上限为100000，其他类型为1000
 - 素材的格式大小等要求与公众平台官网一致
+
+### 9. 临时素材管理
+
+临时素材管理命令用于管理公众号的临时素材，支持上传和获取操作。
+
+```bash
+# 获取临时素材
+python main.py material temporary get <media_id>
+
+# 上传临时素材
+python main.py material temporary upload <type> <file_path>
+
+# 使用uv
+uv run python main.py material temporary <subcommand> [args]
+```
+
+**参数说明：**
+- `<type>`: 素材类型，可选值：image（图片）、voice（语音）、video（视频）和 thumb（缩略图）
+- `<file_path>`: 素材文件路径
+- `<media_id>`: 素材的media_id
+
+**注意事项：**
 - 临时素材保存时间为3天，3天后media_id失效
+- 临时素材不占用素材库数量限制
 
 ### 素材类型说明
 
@@ -373,7 +447,7 @@ uv run python main.py material <subcommand> [args]
 | news    | 图文素材             | 需通过其他接口创建，不支持直接上传                                       |
 | newsimg | 图文消息内图片       | 1MB以下，仅支持jpg/png格式，不占用素材库数量限制                          |
 
-### 素材管理命令示例
+### 永久素材管理命令示例
 
 ```bash
 # 获取素材总数
@@ -389,35 +463,277 @@ python main.py material upload video ./test.mp4 "视频标题" "视频简介"
 python main.py material delete MEDIA_ID
 ```
 
-### 8. Pixivision 管理
+### 10. Pixivision 管理
 
-Pixivision 管理命令用于从 Pixivision 网站爬取插画内容，支持获取插画列表、详情和推送。
+Pixivision 管理命令用于从 Pixivision 网站爬取插画内容，支持获取插画列表、详情、推送和上传图片。
 
 ```bash
 # 获取插画列表（默认第1页）
 python main.py pixivision list
 
 # 获取指定页码范围的插画列表
-python main.py pixivision list 1 3
+python main.py pixivision list --start-page 1 --end-page 3
+
+# 搜索插画
+python main.py pixivision list --query "搜索关键词"
 
 # 获取指定插画的详情
-python main.py pixivision get 11525
+python main.py pixivision detail 11525
+
+# 获取排行榜
+python main.py pixivision ranking
+
+# 获取推荐榜
+python main.py pixivision recommendations
 
 # 推送指定插画到微信
-python main.py pixivision push 11525
+python main.py pixivision push
+
+# 下载指定插画的图片到本地
+python main.py pixivision download 11525
+
+# 下载到指定目录
+python main.py pixivision download 11525 --output ./my_downloads
+
+# 存储插画信息
+python main.py pixivision store 11525
+
+# 查看已存储的插画
+python main.py pixivision stored
+
+# 搜索已存储的插画
+python main.py pixivision search "关键词"
 
 # 使用uv
-uv run python main.py pixivision [list|get|push] [args]
+uv run python main.py pixivision [list|detail|ranking|recommendations|push|download|store|stored|search] [args]
 ```
 
 **参数说明：**
-- `list`：获取插画列表，可指定开始页码和结束页码
-- `get`：获取指定插画的详情，需要提供插画ID
-- `push`：推送指定插画到微信，需要提供插画ID
+- `list`：获取插画列表
+  - `--start-page`：可选参数，开始页码，默认1
+  - `--end-page`：可选参数，结束页码，默认1
+  - `--query`：可选参数，搜索关键词
+  - `--save`：可选参数，是否保存到存储
+- `detail`：获取指定插画的详情，需要提供插画ID
+  - `--save`：可选参数，是否保存到存储
+- `ranking`：获取排行榜插画列表
+  - `--save`：可选参数，是否保存到存储
+- `recommendations`：获取推荐榜插画列表
+  - `--save`：可选参数，是否保存到存储
+- `push`：推送插画到微信
+- `download`：下载插画图片到本地
+  - `illustration_id`：插画ID（必需）
+  - `--output`：可选参数，输出目录，默认使用配置文件中的目录
+- `store`：存储插画信息到本地
+  - `illustration_id`：插画ID（必需）
+- `stored`：查看已存储的插画列表
+  - `--limit`：可选参数，返回数量限制，默认10
+  - `--offset`：可选参数，偏移量，默认0
+- `search`：搜索已存储的插画
+  - `keyword`：搜索关键词（必需）
+  - `--limit`：可选参数，返回数量限制，默认10
+
+**下载功能：**
+- 支持多线程下载（可配置线程数，默认5个）
+- 支持失败重试（可配置重试次数，默认3次）
+- 使用插画标题作为文件夹名称
+- 图片按序号命名（001.jpg, 002.jpg 等）
+- 可通过配置文件 `config.json` 中的 `download` 配置项自定义下载参数：
+  - `max_workers`: 最大线程数，默认 5
+  - `max_retries`: 最大重试次数，默认 3
+  - `directory`: 下载目录，默认 "./downloads"
+
+**图片压缩功能：**
+- 上传图片时会自动检查文件大小
+- 超过阈值的图片会自动压缩（默认阈值1MB）
+- 压缩过程会调整图片尺寸（最大边长2000像素）和质量（85%）
+- 压缩后的图片会自动清理临时文件
+- 可通过配置文件 `config.json` 中的 `image_compression` 配置项自定义压缩参数：
+  - `enabled`: 是否启用压缩，默认 true
+  - `max_size`: 最大文件大小（字节），默认 1048576（1MB）
+  - `max_dimension`: 最大边长（像素），默认 2000
+  - `quality`: JPEG 压缩质量（1-100），默认 85
+
+**存储功能：**
+- 默认使用 JSON 存储，数据保存在 `data/illustrations.json` 文件中
+- 支持 SQLite 数据库存储，可在初始化时指定 `storage_type='database'`
+- 存储的信息包括：标题、文章ID、URL、描述、图片列表、标签、分类、缩略图等
+- 可通过 `pixivision store` 命令存储插画信息
+- 可通过 `pixivision stored` 命令查看已存储的插画
+- 可通过 `pixivision search` 命令搜索已存储的插画
+
+### 11. 草稿管理
+
+草稿管理命令用于管理公众号的草稿箱，支持设置开关状态、新增草稿、获取草稿列表、获取草稿总数、删除草稿、获取草稿详情和更新草稿等操作。
+
+#### 11.1 草稿箱开关设置
+
+草稿箱开关设置用于开启或查询草稿箱和发布功能的开关状态。详细文档请参考：[草稿箱开关设置](https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_switch.html)
+
+**注意事项：**
+- 此接口应在服务器端调用，不可在前端（小程序、网页、APP等）直接调用
+- 内测期间会逐步放量，任何用户都可能会自动打开
+- 此开关开启后不可逆，换言之，无法从开启的状态回到关闭
+- 内测期间，无论开关开启与否，旧版的图文素材API，以及新版的草稿箱、发布等API均可以正常使用
+- 在内测结束之后，所有用户都将自动开启，即草稿箱、发布等功能将对所有用户开放
+
+
+
+**命令示例：**
+
+```bash
+# 设置草稿箱开关状态（开启）
+python main.py draft switch
+
+# 仅检查草稿箱开关状态
+python main.py draft switch --checkonly 1
+
+# 设置草稿箱开关状态（关闭）
+python main.py draft switch --checkonly 0
+```
+
+#### 11.2 草稿创建命令（图片自动上传）
+
+`draft create` 命令可以自动上传图片到素材库并创建图文消息草稿，支持从本地文件夹或 Pixivision 文章ID获取图片。
+
+**基本用法：**
+
+```bash
+# 从本地文件夹创建草稿（使用配置默认值）
+python main.py draft create "./images/folder"
+
+# 从 Pixivision 文章ID创建草稿
+python main.py draft create 11525
+
+# 指定标题和作者
+python main.py draft create "./images/folder" --title "我的图片集" --author "作者名"
+
+# 强制压缩/不压缩图片
+python main.py draft create "./images/folder" --compress
+python main.py draft create "./images/folder" --no-compress
+
+# 创建图片消息草稿
+python main.py draft create 11525 --message-type newspic
+
+# 完整示例
+python main.py draft create 11525 \
+  --title "插画精选" \
+  --author "小编" \
+  --digest "精选插画作品" \
+  --show-cover 1 \
+  --message-type news
+```
+
+**参数说明：**
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `source` | 图片来源：本地文件夹路径或 Pixivision 文章ID | 必填 |
+| `--title` | 草稿标题，默认使用文件夹名或插画标题 | 自动获取 |
+| `--author` | 作者名称，默认使用配置中的 `default_author` | 配置值 |
+| `--compress` | 是否压缩图片 | 使用配置 |
+| `--digest` | 图文消息摘要 | 自动生成 |
+| `--content` | 图文消息内容（支持HTML） | 自动生成 |
+| `--show-cover` | 是否显示封面：1显示，0不显示 | 1 |
+| `--message-type` | 消息类型：`news`(图文消息)或`newspic`(图片消息) | `news` |
+
+**配置项：**
+
+在 `config.json` 中可以配置草稿默认值：
+
+```json
+{
+  "draft": {
+    "default_author": "公众号作者",
+    "default_show_cover": 1
+  }
+}
+```
+
+#### 11.3 草稿管理命令
+
+```bash
+# 新增草稿
+python main.py draft add '[{"title": "标题", "content": "内容", "thumb_media_id": "缩略图ID"}]'
+
+# 获取草稿列表
+python main.py draft list
+
+# 获取草稿列表（指定偏移量和数量）
+python main.py draft list --offset 0 --count 10
+
+# 获取草稿列表（不返回内容）
+python main.py draft list --no-content 1
+
+# 获取草稿总数
+python main.py draft count
+
+# 删除草稿
+python main.py draft delete <media_id>
+
+# 获取草稿详情
+python main.py draft get <media_id>
+
+# 更新草稿
+python main.py draft update <media_id> 0 '[{"title": "新标题", "content": "新内容", "thumb_media_id": "缩略图ID"}]'
+
+# 发布草稿
+python main.py draft submit <media_id>
+```
+
+# 使用uv
+uv run python main.py draft <subcommand> [args]
+```
+
+**参数说明：**
+- `switch`：设置或查询草稿箱开关状态
+  - `checkonly`：仅检查状态时传1，默认为0（设置状态）
+- `add`：新增草稿
+  - `title`：标题
+  - `content`：内容
+  - `thumb_media_id`：封面图片素材id（必须是永久MediaID）
+  - `--author`：作者（可选）
+  - `--digest`：摘要（可选）
+  - `--content_source_url`：原文地址（可选）
+- `list`：获取草稿列表
+  - `offset`：偏移量，默认为0
+  - `count`：数量，默认为10
+  - `no_content`：是否返回内容，默认为0（返回内容）
+- `count`：获取草稿总数
+- `delete`：删除草稿
+  - `media_id`：草稿的media_id
+- `get`：获取草稿详情
+  - `media_id`：草稿的media_id
+- `update`：更新草稿
+  - `media_id`：草稿的media_id
+  - `index`：文章在图文消息中的位置，第一篇为0
+  - `title`：标题
+  - `content`：内容
+  - `thumb_media_id`：封面图片素材id（必须是永久MediaID）
+  - `--author`：作者（可选）
+  - `--digest`：摘要（可选）
+  - `--content_source_url`：原文地址（可选）
+
+**注意事项：**
+- 草稿箱开关开启后不可逆，无法从开启状态回到关闭
+- 内测期间，无论开关开启与否，旧版的图文素材API以及新版的草稿箱、发布等API均可以正常使用
+- 内测结束后，所有用户都将自动开启草稿箱功能
+- 上传到草稿箱中的素材被群发或发布后，该素材将从草稿箱中移除
+- 新增草稿也可在公众平台官网-草稿箱中查看和管理
+- 删除草稿操作不可撤销，请谨慎操作
 
 ## 注意事项
-注意，根据目前公众号平台,许多接口(例如群发)都需要认证。具体请查看[群发接口]("https://developers.weixin.qq.com/doc/service/api/notify/message/api_sendall.html").
+注意，根据目前公众号平台,许多接口(例如群发)都需要认证。具体请查看[群发接口]('https://developers.weixin.qq.com/doc/service/api/notify/message/api_sendall.html').
 而企业认证需要缴年费，这也是微信赚钱的一种方式吧。
+
+此外，发布能力相关接口（如获取已发布的消息列表）也需要认证公众号或服务号才有权力使用，具体请查看[发布能力接口文档]('https://developers.weixin.qq.com/doc/subscription/api/public/api_freepublish_batchget.html')。
+
+未认证公众号拥有的 API 访问能力包括：
+- **素材管理**：支持上传和获取临时素材、永久素材
+- **部分基础消息**：支持发送客服消息等基础消息功能
+- **草稿管理**：支持创建和管理草稿
+
+认证公众号或服务号可以访问更多高级功能，如群发消息、自定义菜单等。
 
 1. **微信公众号配置**：
    - 需要在微信公众平台设置中获取 AppID 和 AppSecret
@@ -510,12 +826,13 @@ uv run python main.py pixivision [list|get|push] [args]
 | 删除个性化菜单 | `https://api.weixin.qq.com/cgi-bin/menu/delconditional` | POST |
 | 测试个性化菜单匹配 | `https://api.weixin.qq.com/cgi-bin/menu/trymatch` | POST |
 
-### 素材管理API
+### 永久素材管理API
 
 #### 永久素材
 | 功能 | URL | 方法 |
 |------|-----|------|
 | 获取永久素材总数 | `https://api.weixin.qq.com/cgi-bin/material/get_materialcount` | GET |
+| 获取永久素材列表 | `https://api.weixin.qq.com/cgi-bin/material/batchget_material` | POST |
 | 获取永久素材 | `https://api.weixin.qq.com/cgi-bin/material/get_material` | POST |
 | 上传永久素材 | `https://api.weixin.qq.com/cgi-bin/material/add_material` | POST |
 | 删除永久素材 | `https://api.weixin.qq.com/cgi-bin/material/del_material` | POST |
@@ -530,7 +847,7 @@ uv run python main.py pixivision [list|get|push] [args]
 #### 图文消息素材
 | 功能 | URL | 方法 |
 |------|-----|------|
-| 上传图文消息素材 | `https://api.weixin.qq.com/cgi-bin/media/uploadnews` | POST |
+| 上传图文消息素材 | `https://api.weixin.qq.com/cgi-bin/media/uploadnews` | POST | 说明：本接口用于上传图文消息，该能力已更新为草稿箱 |
 | 上传图文消息内图片 | `https://api.weixin.qq.com/cgi-bin/media/uploadimg` | POST |
 
 ### 消息发送API
@@ -545,6 +862,17 @@ uv run python main.py pixivision [list|get|push] [args]
 | 发送模板消息 | `https://api.weixin.qq.com/cgi-bin/message/template/send` | POST |
 | 发送客服消息 | `https://api.weixin.qq.com/cgi-bin/message/custom/send` | POST |
 
+### 草稿管理 API
+| 功能 | URL | 方法 |
+|------|-----|------|
+| 草稿箱开关设置 | `https://api.weixin.qq.com/cgi-bin/draft/switch` | GET |
+| 新增草稿 | `https://api.weixin.qq.com/cgi-bin/draft/add` | POST |
+| 获取草稿列表 | `https://api.weixin.qq.com/cgi-bin/draft/batchget` | POST |
+| 获取草稿总数 | `https://api.weixin.qq.com/cgi-bin/draft/count` | GET |
+| 删除草稿 | `https://api.weixin.qq.com/cgi-bin/draft/delete` | POST |
+| 获取草稿详情 | `https://api.weixin.qq.com/cgi-bin/draft/get` | POST |
+| 更新草稿 | `https://api.weixin.qq.com/cgi-bin/draft/update` | POST |
+
 ### 发布管理API
 
 | 功能 | URL | 方法 |
@@ -554,6 +882,7 @@ uv run python main.py pixivision [list|get|push] [args]
 | 删除发布文章 | `https://api.weixin.qq.com/cgi-bin/freepublish/delete` | POST |
 | 发布状态查询 | `https://api.weixin.qq.com/cgi-bin/freepublish/get` | POST |
 | 发布草稿 | `https://api.weixin.qq.com/cgi-bin/freepublish/submit` | POST |
+| 草稿箱开关设置 | `https://api.weixin.qq.com/cgi-bin/draft/switch` | POST |
 
 ## 许可证
 

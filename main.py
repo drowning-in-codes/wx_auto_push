@@ -1,20 +1,28 @@
-import random
-import sys
-import os
-from datetime import datetime
-import argparse
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+微信公众号自动推送工具
+支持定时推送、模板消息、图片消息等功能
+"""
 
-# 添加项目根目录到Python路径
+import os
+import sys
+import time
+import argparse
+import threading
+from datetime import datetime
+
+# 添加项目根目录到 Python 路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.utils.config import Config
-from src.crawlers.crawler_factory import CrawlerFactory
-from src.utils.llm_client import LLMClient
-from src.push.wechat_push_service import WeChatPushService
-from src.scheduler.schedule_manager import ScheduleManager
 from src.utils.db_manager import DBManager
-from src.push.wechat_callback_server import WeChatCallbackServer
+from src.crawlers.crawler_factory import CrawlerFactory
+from src.push.wechat_push_service import WeChatPushService
 from src.push.pixivision_service import PixivisionService
+from src.scheduler.schedule_manager import ScheduleManager
+from src.push.wechat_callback_server import WeChatCallbackServer
+from src.utils.llm_client import LLMClient
 
 
 class WeChatAutoPush:
@@ -24,6 +32,8 @@ class WeChatAutoPush:
         self.image_crawler = None
         self.llm_client = None
         self.push_service = None
+        self.wechat_draft_service = None
+        self.draft_service = None
         self.schedule_manager = None
         self.db_manager = DBManager()
         self.callback_server = None
@@ -55,9 +65,36 @@ class WeChatAutoPush:
         # 初始化推送服务
         self.push_service = WeChatPushService(self.config)
 
+        # 初始化微信草稿服务
+        from src.push.wechat_draft_service import WeChatDraftService
+        from src.push.wechat_client import WeChatClient
+
+        wechat_config = self.config.get_wechat_config()
+        proxy_config = self.config.get_proxy_config()
+        wechat_client = WeChatClient(
+            wechat_config.get("app_id"), wechat_config.get("app_secret"), proxy_config
+        )
+        self.wechat_draft_service = WeChatDraftService(wechat_client)
+
         # 初始化 Pixivision 服务
         proxy_config = self.config.get_proxy_config()
-        self.pixivision_service = PixivisionService(proxy_config)
+        # 初始化 Pixivision 服务（使用JSON存储）
+        self.pixivision_service = PixivisionService(
+            proxy_config=proxy_config,
+            request_config=self.config.get_request_config(),
+            storage_type="json",
+            file_path="data/illustrations.json",
+        )
+
+        # 初始化草稿服务
+        from src.push.draft_service import DownloadAndDraftService
+
+        self.draft_service = DownloadAndDraftService(
+            self.push_service,
+            self.wechat_draft_service,
+            self.pixivision_service,
+            self.config,
+        )
 
         # 初始化调度器
         self.schedule_manager = ScheduleManager(self.config, self._run_push_task)
@@ -78,1160 +115,947 @@ class WeChatAutoPush:
             "app_id": "WECHAT_APP_ID",
             "app_secret": "WECHAT_APP_SECRET",
             "template_id": "WECHAT_TEMPLATE_ID",
-            "token": "WECHAT_TOKEN",
-            "preview_enabled": "WECHAT_PREVIEW_ENABLED",
-            "preview_towxname": "WECHAT_PREVIEW_TOWXNAME",
+            "preview_openid": "WECHAT_PREVIEW_OPENID",
         }
 
-        # 更新配置
+        # 更新或添加配置
         updated_lines = []
         for line in existing_lines:
             line = line.strip()
-            # 检查是否是我们要更新的配置项
-            updated = False
-            for key, env_var in config_map.items():
-                if line.startswith(f"{env_var}="):
-                    if key in config_data:
-                        if key == "preview_enabled":
-                            value = "true" if config_data[key] else "false"
-                        else:
-                            value = config_data[key]
-                        updated_lines.append(f"{env_var}={value}\n")
-                        updated = True
-                    break
-            if not updated:
-                updated_lines.append(line + "\n")
+            if not line or line.startswith("#"):
+                updated_lines.append(line)
+                continue
 
-        # 添加新的配置项
-        for key, env_var in config_map.items():
+            key = line.split("=")[0].strip()
+            if key in config_map.values():
+                # 跳过现有配置，稍后统一添加
+                continue
+            updated_lines.append(line)
+
+        # 添加新配置
+        for key, env_key in config_map.items():
             if key in config_data:
-                # 检查是否已经存在
-                exists = False
-                for line in updated_lines:
-                    if line.startswith(f"{env_var}="):
-                        exists = True
-                        break
-                if not exists:
-                    if key == "preview_enabled":
-                        value = "true" if config_data[key] else "false"
-                    else:
-                        value = config_data[key]
-                    updated_lines.append(f"{env_var}={value}\n")
+                updated_lines.append(f"{env_key}={config_data[key]}")
 
-        # 写入 .env 文件
+        # 写入更新后的配置
         with open(env_file, "w", encoding="utf-8") as f:
-            f.writelines(updated_lines)
+            f.write("\n".join(updated_lines) + "\n")
 
-        print(f"配置已保存到 {env_file} 文件")
-
-    def login(self):
-        """
-        登录微信公众号，获取并存储 token
-        """
-        print("正在登录微信公众号...")
-
-        try:
-            # 尝试获取 access token
-            access_token = self.push_service.client.get_access_token()
-
-            # 检查 token 是否有效
-            if access_token:
-                print("登录成功！")
-                print(f"Access Token: {access_token[:20]}...")  # 只显示前20个字符
-                print("Token 已存储到缓存中")
-
-                # 获取 token 过期时间
-                from datetime import datetime
-
-                expire_time = self.push_service.client.token_expire_time
-                expire_datetime = datetime.fromtimestamp(expire_time)
-                print(f"Token 过期时间: {expire_datetime}")
-            else:
-                print("登录失败：无法获取 access token")
-        except Exception as e:
-            print(f"登录失败: {e}")
+        print("微信公众号配置已保存")
 
     def _initialize_callback_server(self):
         """
-        初始化并启动微信回调服务器
+        初始化回调服务器
         """
-        callback_config = self.config.get_wechat_config().get("callback", {})
-        if callback_config.get("enabled", False):
+        wechat_config = self.config.get_wechat_config()
+        callback_config = wechat_config.get("callback", {})
+        if callback_config.get("enabled"):
             self.callback_server = WeChatCallbackServer(
-                self.config, self.db_manager, self.push_service
+                config=self.config,
+                db_manager=self.db_manager,
+                push_service=self.push_service,
             )
             # 启动回调服务器
             self.callback_server.run()
-
-    def _initialize_wechat_menu(self):
-        """
-        初始化微信自定义菜单
-        """
-        print("初始化微信自定义菜单...")
-        wechat_config = self.config.get_wechat_config()
-        menu_config = wechat_config.get("menu", {})
-        self.push_service.menu_service.create_menu(menu_config)
-        print("微信自定义菜单初始化完成")
+            print("微信回调服务器已启动")
 
     def _run_push_task(self):
-        """执行推送任务"""
-        print("开始执行推送任务...")
+        """
+        运行推送任务
+        """
+        try:
+            push_config = self.config.get_push_config()
+            push_type = push_config.get("type", "text")
 
-        # 随机选择推送类型
-        content_types = self.config.get_push_config().get(
-            "content_types", ["text", "image"]
-        )
-        content_type = random.choice(content_types)
-
-        # 生成clientmsgid以避免重复推送
-        import uuid
-
-        clientmsgid = str(uuid.uuid4())
-
-        if content_type == "text":
-            # 爬取动漫新闻
-            news = self.anime_crawler.crawl() if self.anime_crawler else None
-
-            if news:
-                # 使用LLM改写内容
-                if self.llm_client:
-                    rewritten_content = self.llm_client.rewrite_content(news["title"])
-                    news["content"] = rewritten_content
-
-                # 插入消息记录（待发送）
-                message_id = self.db_manager.insert_message(
-                    task_id=clientmsgid,
-                    title=news["title"],
-                    content=news.get("content", news["title"]),
-                    status=0,
-                )
-
-                try:
-                    # 检查是否需要预览
-                    preview_config = self.config.get_wechat_config().get("preview", {})
-                    if preview_config.get("enabled"):
-                        print("发送预览消息...")
-                        # 发送预览消息
-                        preview_result = self.push_service.preview_news_message(
-                            news["title"],
-                            news.get("content", news["title"]),
-                            "",  # 可以添加默认图片
-                            news["url"],
-                        )
-                        print(f"预览消息发送结果: {preview_result}")
-                        print("预览消息已发送，请在手机上查看效果")
-
-                    # 推送新闻
-                    result = self.push_service.push_news_article(
-                        news["title"],
-                        news.get("content", news["title"]),
-                        "",  # 可以添加默认图片
-                        news["url"],
-                        clientmsgid=clientmsgid,
-                        send_ignore=False,  # 是否忽略原创校验
-                    )
-                    print(f"推送新闻结果: {result}")
-
-                    # 获取msg_id并更新到数据库
-                    msg_id = result.get("msg_id")
-                    if msg_id:
-                        self.db_manager.update_message_msg_id(
-                            message_id=message_id, msg_id=msg_id
-                        )
-                        # 设置35分钟后检查消息状态
-                        self._schedule_status_check(
-                            message_id=message_id, msg_id=msg_id
-                        )
-
-                    # 更新消息状态为已发送
-                    self.db_manager.update_message_status(
-                        message_id=message_id, status=1, send_time=datetime.now()
-                    )
-                except Exception as e:
-                    print(f"推送失败: {e}")
-                    # 更新消息状态为失败
-                    self.db_manager.update_message_status(
-                        message_id=message_id, status=2
-                    )
+            if push_type == "text":
+                self.push_text_message()
+            elif push_type == "image":
+                self.push_image_message()
+            elif push_type == "news":
+                self.push_news_message()
+            elif push_type == "template":
+                self.push_template_message()
+            elif push_type == "pixivision":
+                self.push_pixivision_illustration()
             else:
-                print("未爬取到新闻内容")
-                # 插入爬取失败的记录
-                self.db_manager.insert_message(
-                    task_id=clientmsgid,
-                    title="爬取失败 - 动漫新闻",
-                    content="未能爬取到动漫新闻内容",
-                    status=2,
-                )
+                print(f"不支持的推送类型: {push_type}")
+        except Exception as e:
+            print(f"运行推送任务时出错: {e}")
 
-        elif content_type == "image":
-            # 爬取图片
-            image = self.image_crawler.crawl() if self.image_crawler else None
+    def push_text_message(self, content=None):
+        """
+        推送文本消息
+        """
+        if content is None:
+            content = "这是一条测试消息"
+        self.push_service.send_text_message(content)
 
-            if image:
-                # 插入消息记录（待发送）
-                message_id = self.db_manager.insert_message(
-                    task_id=clientmsgid,
-                    title=image.get("alt", "动漫图片"),
-                    content=image.get("alt", "动漫图片"),
-                    status=0,
-                )
+    def push_image_message(self, image_path=None):
+        """
+        推送图片消息
+        """
+        if image_path is None:
+            # 默认使用第一张图片
+            image_sources = self.config.get_image_sources()
+            if image_sources and self.image_crawler:
+                images = self.image_crawler.crawl()
+                if images:
+                    image_path = images[0]
+        if image_path:
+            self.push_service.send_image_message(image_path)
+        else:
+            print("没有可用的图片")
 
-                try:
-                    # 获取图片发布方式配置
-                    push_config = self.config.get_push_config()
-                    image_publish_type = push_config.get("image_publish_type", "image")
+    def push_news_message(self):
+        """
+        推送图文消息
+        """
+        # 示例：创建一个简单的图文消息
+        articles = [
+            {
+                "title": "测试图文消息",
+                "description": "这是一条测试图文消息",
+                "url": "https://www.example.com",
+                "picurl": "https://www.example.com/image.jpg",
+            }
+        ]
+        self.push_service.send_news_message(articles)
 
-                    # 检查是否需要预览
-                    preview_config = self.config.get_wechat_config().get("preview", {})
-                    if preview_config.get("enabled"):
-                        print("发送预览消息...")
-                        # 根据配置发送不同类型的预览消息
-                        if image_publish_type == "news":
-                            # 发送图文预览消息
-                            preview_result = self.push_service.preview_news_message(
-                                image.get("alt", "图片分享"),
-                                image.get("alt", "分享一张图片"),
-                                image["url"],
-                                image.get("url", ""),
-                            )
-                        else:
-                            # 发送图片预览消息
-                            preview_result = self.push_service.preview_image_message(
-                                image["url"], image.get("alt", "动漫图片")
-                            )
-                        print(f"预览消息发送结果: {preview_result}")
-                        print("预览消息已发送，请在手机上查看效果")
+    def push_template_message(self, data=None):
+        """
+        推送模板消息
+        """
+        if data is None:
+            data = {
+                "keyword1": {"value": "测试内容"},
+                "keyword2": {"value": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
+            }
+        self.push_service.send_template_message(data)
 
-                    # 根据配置推送不同类型的消息
-                    if image_publish_type == "news":
-                        # 推送为图文消息
-                        result = self.push_service.push_news_article(
-                            image.get("alt", "图片分享"),
-                            image.get("alt", "分享一张图片"),
-                            image["url"],
-                            image.get("url", ""),
-                            clientmsgid=clientmsgid,
-                            send_ignore=False,
-                        )
-                    else:
-                        # 推送为图片消息
-                        result = self.push_service.push_image_content(
-                            image["url"],
-                            image.get("alt", "动漫图片"),
-                            clientmsgid=clientmsgid,
-                        )
-                    print(f"推送图片结果: {result}")
+    def push_pixivision_illustration(self):
+        """
+        推送 Pixivision 插画
+        """
+        try:
+            # 爬取 Pixivision 插画
+            illustrations = self.pixivision_service.get_latest_illustrations()
+            if not illustrations:
+                print("没有获取到插画")
+                return
 
-                    # 获取msg_id并更新到数据库
-                    msg_id = result.get("msg_id")
-                    if msg_id:
-                        self.db_manager.update_message_msg_id(
-                            message_id=message_id, msg_id=msg_id
-                        )
-                        # 设置35分钟后检查消息状态
-                        self._schedule_status_check(
-                            message_id=message_id, msg_id=msg_id
-                        )
+            # 推送第一张插画
+            illustration = illustrations[0]
+            print(f"推送插画: {illustration.get('title')}")
 
-                    # 更新消息状态为已发送
-                    self.db_manager.update_message_status(
-                        message_id=message_id, status=1, send_time=datetime.now()
-                    )
-                except Exception as e:
-                    print(f"推送失败: {e}")
-                    # 更新消息状态为失败
-                    self.db_manager.update_message_status(
-                        message_id=message_id, status=2
-                    )
+            # 下载图片
+            image_url = (
+                illustration.get("thumbnail") or illustration.get("images", [])[0]
+            )
+            if image_url:
+                # 推送图片消息
+                self.push_service.send_image_message_from_url(image_url)
             else:
-                print("未爬取到图片内容")
-                # 插入爬取失败的记录
-                self.db_manager.insert_message(
-                    task_id=clientmsgid,
-                    title="爬取失败 - 动漫图片",
-                    content="未能爬取到动漫图片内容",
-                    status=2,
+                print("没有图片URL")
+        except Exception as e:
+            print(f"推送 Pixivision 插画失败: {e}")
+
+    def download_pixivision_illustration(self, illustration_id, output_dir=None):
+        """
+        下载 Pixivision 插画图片
+
+        :param illustration_id: 插画ID
+        :param output_dir: 输出目录（可选，默认使用配置文件中的目录）
+        """
+        try:
+            # 获取下载目录
+            if output_dir is None:
+                output_dir = self.config.get_download_directory()
+
+            # 获取下载配置
+            download_config = self.config.get_download_config()
+            max_workers = download_config.get("max_workers", 5)
+            max_retries = download_config.get("max_retries", 3)
+
+            print(f"开始下载插画 {illustration_id} 的图片...")
+            print(f"输出目录: {output_dir}")
+
+            # 下载图片
+            success, download_path, downloaded_files = (
+                self.pixivision_service.download_illustration_images(
+                    illustration_id,
+                    output_dir,
+                    max_retries=max_retries,
+                    max_workers=max_workers,
                 )
-
-        print("推送任务执行完成")
-
-    def run_once(self):
-        """立即执行一次推送任务"""
-        return self.schedule_manager.run_once()
-
-    def push_now(self, content_type=None):
-        """
-        立即推送指定类型的内容
-        :param content_type: 推送类型，可选值："text", "image"，默认随机
-        :return: 推送结果
-        """
-        print("开始执行立即推送任务...")
-
-        # 如果未指定类型，随机选择
-        if not content_type:
-            content_types = self.config.get_push_config().get(
-                "content_types", ["text", "image"]
             )
-            content_type = random.choice(content_types)
 
-        # 生成clientmsgid以避免重复推送
-        import uuid
-
-        clientmsgid = str(uuid.uuid4())
-
-        if content_type == "text":
-            # 爬取动漫新闻
-            news = self.anime_crawler.crawl() if self.anime_crawler else None
-
-            if news:
-                # 使用LLM改写内容
-                if self.llm_client:
-                    rewritten_content = self.llm_client.rewrite_content(news["title"])
-                    news["content"] = rewritten_content
-
-                # 插入消息记录（待发送）
-                message_id = self.db_manager.insert_message(
-                    task_id=clientmsgid,
-                    title=news["title"],
-                    content=news.get("content", news["title"]),
-                    status=0,
-                )
-
-                try:
-                    # 检查是否需要预览
-                    preview_config = self.config.get_wechat_config().get("preview", {})
-                    if preview_config.get("enabled"):
-                        print("发送预览消息...")
-                        # 发送预览消息
-                        preview_result = self.push_service.preview_news_message(
-                            news["title"],
-                            news.get("content", news["title"]),
-                            "",  # 可以添加默认图片
-                            news["url"],
-                        )
-                        print(f"预览消息发送结果: {preview_result}")
-                        print("预览消息已发送，请在手机上查看效果")
-
-                    # 推送新闻
-                    result = self.push_service.push_news_article(
-                        news["title"],
-                        news.get("content", news["title"]),
-                        "",  # 可以添加默认图片
-                        news["url"],
-                        clientmsgid=clientmsgid,
-                        send_ignore=False,  # 是否忽略原创校验
-                    )
-                    print(f"推送新闻结果: {result}")
-
-                    # 获取msg_id并更新到数据库
-                    msg_id = result.get("msg_id")
-                    if msg_id:
-                        self.db_manager.update_message_msg_id(
-                            message_id=message_id, msg_id=msg_id
-                        )
-                        # 设置35分钟后检查消息状态
-                        self._schedule_status_check(
-                            message_id=message_id, msg_id=msg_id
-                        )
-
-                    # 更新消息状态为已发送
-                    self.db_manager.update_message_status(
-                        message_id=message_id, status=1, send_time=datetime.now()
-                    )
-                    return result
-                except Exception as e:
-                    print(f"推送失败: {e}")
-                    # 更新消息状态为失败
-                    self.db_manager.update_message_status(
-                        message_id=message_id, status=2
-                    )
-                    return None
+            if success:
+                print(f"\n下载成功！")
+                print(f"保存路径: {download_path}")
+                print(f"下载文件数: {len(downloaded_files)}")
+                for file_path in downloaded_files:
+                    print(f"  - {os.path.basename(file_path)}")
             else:
-                print("未爬取到新闻内容")
-                return None
+                print(f"\n下载失败或未下载到任何图片")
+                if download_path:
+                    print(f"目标路径: {download_path}")
 
-        elif content_type == "image":
-            # 爬取图片
-            image = self.image_crawler.crawl() if self.image_crawler else None
+        except Exception as e:
+            print(f"下载 Pixivision 插画失败: {e}")
 
-            if image:
-                # 插入消息记录（待发送）
-                message_id = self.db_manager.insert_message(
-                    task_id=clientmsgid,
-                    title=image.get("alt", "动漫图片"),
-                    content=image.get("alt", "动漫图片"),
-                    status=0,
-                )
+    def store_pixivision_illustration(self, illustration_id):
+        """
+        存储 Pixivision 插画信息
+        """
+        try:
+            illustration = self.pixivision_service.get_illustration_by_id(
+                illustration_id
+            )
+            if not illustration:
+                print(f"获取插画 {illustration_id} 失败")
+                return
 
-                try:
-                    # 获取图片发布方式配置
-                    push_config = self.config.get_push_config()
-                    image_publish_type = push_config.get("image_publish_type", "image")
-
-                    # 检查是否需要预览
-                    preview_config = self.config.get_wechat_config().get("preview", {})
-                    if preview_config.get("enabled"):
-                        print("发送预览消息...")
-                        # 根据配置发送不同类型的预览消息
-                        if image_publish_type == "news":
-                            # 发送图文预览消息
-                            preview_result = self.push_service.preview_news_message(
-                                image.get("alt", "图片分享"),
-                                image.get("alt", "分享一张图片"),
-                                image["url"],
-                                image.get("url", ""),
-                            )
-                        else:
-                            # 发送图片预览消息
-                            preview_result = self.push_service.preview_image_message(
-                                image["url"], image.get("alt", "动漫图片")
-                            )
-                        print(f"预览消息发送结果: {preview_result}")
-                        print("预览消息已发送，请在手机上查看效果")
-
-                    # 根据配置推送不同类型的消息
-                    if image_publish_type == "news":
-                        # 推送为图文消息
-                        result = self.push_service.push_news_article(
-                            image.get("alt", "图片分享"),
-                            image.get("alt", "分享一张图片"),
-                            image["url"],
-                            image.get("url", ""),
-                            clientmsgid=clientmsgid,
-                            send_ignore=False,
-                        )
-                    else:
-                        # 推送为图片消息
-                        result = self.push_service.push_image_content(
-                            image["url"],
-                            image.get("alt", "动漫图片"),
-                            clientmsgid=clientmsgid,
-                        )
-                    print(f"推送图片结果: {result}")
-
-                    # 获取msg_id并更新到数据库
-                    msg_id = result.get("msg_id")
-                    if msg_id:
-                        self.db_manager.update_message_msg_id(
-                            message_id=message_id, msg_id=msg_id
-                        )
-                        # 设置35分钟后检查消息状态
-                        self._schedule_status_check(
-                            message_id=message_id, msg_id=msg_id
-                        )
-
-                    # 更新消息状态为已发送
-                    self.db_manager.update_message_status(
-                        message_id=message_id, status=1, send_time=datetime.now()
-                    )
-                    return result
-                except Exception as e:
-                    print(f"推送失败: {e}")
-                    # 更新消息状态为失败
-                    self.db_manager.update_message_status(
-                        message_id=message_id, status=2
-                    )
-                    return None
+            # 保存插画信息
+            success = self.pixivision_service.save_illustration(illustration)
+            if success:
+                print(f"插画 {illustration_id} 存储成功")
             else:
-                print("未爬取到图片内容")
-                return None
+                print(f"插画 {illustration_id} 存储失败")
+        except Exception as e:
+            print(f"存储 Pixivision 插画失败: {e}")
 
-        print("立即推送任务执行完成")
-
-    def start_schedule(self):
-        """启动调度器，开始定时执行任务"""
-        self.schedule_manager.start()
-
-    def _schedule_status_check(self, message_id, msg_id):
+    def get_stored_pixivision_illustrations(self, limit=10, offset=0):
         """
-        设置定时检查消息状态的任务
-        """
-        # 35分钟后检查状态
-        from datetime import datetime, timedelta
-
-        run_time = datetime.now() + timedelta(minutes=35)
-
-        # 使用APScheduler添加定时任务
-        from apscheduler.schedulers.background import BackgroundScheduler
-
-        scheduler = BackgroundScheduler()
-        scheduler.add_job(
-            func=self.check_message_status,
-            args=[message_id, msg_id],
-            trigger="date",
-            run_date=run_time,
-            id=f"check_status_{message_id}_{msg_id}",
-            replace_existing=True,
-        )
-        scheduler.start()
-        print(f"已设置35分钟后检查消息状态的任务: {message_id}, {msg_id}")
-
-    def check_message_status(self, message_id, msg_id):
-        """
-        检查消息发送状态
+        获取已存储的 Pixivision 插画
         """
         try:
-            # 获取消息状态
-            status_result = self.push_service.wechat_client.get_mass_status(msg_id)
-            print(f"检查消息状态结果: {status_result}")
+            illustrations = self.pixivision_service.get_stored_illustrations(
+                limit, offset
+            )
+            if not illustrations:
+                print("没有存储的插画")
+                return
 
-            # 根据状态更新数据库
-            msg_status = status_result.get("msg_status")
-            if msg_status == "SEND_SUCCESS":
-                # 发送成功
-                self.db_manager.update_message_status(
-                    message_id=message_id, status=1, send_time=datetime.now()
+            print(f"共找到 {len(illustrations)} 张存储的插画:")
+            for i, illustration in enumerate(illustrations, 1):
+                print(
+                    f"{i}. {illustration.get('title')} (ID: {illustration.get('article_id')})"
                 )
-                print(f"消息 {msg_id} 发送成功")
-            elif msg_status == "SEND_FAIL":
-                # 发送失败
-                self.db_manager.update_message_status(message_id=message_id, status=2)
-                print(f"消息 {msg_id} 发送失败")
-            elif msg_status in ["SENDING", "DELETE"]:
-                # 发送中或已删除，不更新状态
-                print(f"消息 {msg_id} 状态: {msg_status}")
+                print(f"   URL: {illustration.get('url')}")
+                print(f"   标签: {', '.join(illustration.get('tags', []))}")
+                print()
         except Exception as e:
-            print(f"检查消息状态失败: {e}")
+            print(f"获取存储的 Pixivision 插画失败: {e}")
 
-    # 素材管理相关方法
-    def get_material_count(self):
+    def search_pixivision_illustrations(self, keyword, limit=100):
         """
-        获取素材总数
+        搜索 Pixivision 插画
         """
         try:
-            result = self.push_service.material_service.get_material_count()
-            print(f"获取素材总数结果: {result}")
+            illustrations = self.pixivision_service.search_illustrations(keyword, limit)
+            if not illustrations:
+                print(f"没有找到包含 '{keyword}' 的插画")
+                return
+
+            print(f"共找到 {len(illustrations)} 张匹配的插画:")
+            for i, illustration in enumerate(illustrations, 1):
+                print(
+                    f"{i}. {illustration.get('title')} (ID: {illustration.get('article_id')})"
+                )
+                print(f"   URL: {illustration.get('url')}")
+                print(f"   标签: {', '.join(illustration.get('tags', []))}")
+                print()
         except Exception as e:
-            print(f"获取素材总数失败: {e}")
+            print(f"搜索 Pixivision 插画失败: {e}")
 
-    def list_materials(self, material_type=None):
-        """
-        列出素材
-        """
-        print(f"暂未实现列出素材功能，material_type: {material_type}")
-
-    def get_material(self, media_id):
-        """
-        获取素材
-        """
-        try:
-            result = self.push_service.material_service.get_material(media_id)
-            print(f"获取素材结果: {result}")
-        except Exception as e:
-            print(f"获取素材失败: {e}")
-
-    def upload_material(self, material_type, file_path, title=None, description=None):
-        """
-        上传素材
-        """
-        try:
-            result = self.push_service.material_service.add_material(
-                material_type, file_path, title, description
-            )
-            print(f"上传素材结果: {result}")
-        except Exception as e:
-            print(f"上传素材失败: {e}")
-
-    def delete_material(self, media_id):
-        """
-        删除素材
-        """
-        try:
-            result = self.push_service.material_service.delete_material(media_id)
-            print(f"删除素材结果: {result}")
-        except Exception as e:
-            print(f"删除素材失败: {e}")
-
-    # 发布相关方法
-    def get_published_news_list(self, offset=0, count=10, no_content=0):
-        """
-        获取已发布的消息列表
-        """
-        try:
-            result = self.push_service.publish_service.get_published_news_list(
-                offset, count, no_content
-            )
-            print(f"获取已发布消息列表结果: {result}")
-        except Exception as e:
-            print(f"获取已发布消息列表失败: {e}")
-
-    def get_published_article(self, article_id):
-        """
-        获取已发布的图文信息
-        """
-        try:
-            result = self.push_service.publish_service.get_published_article(article_id)
-            print(f"获取已发布图文信息结果: {result}")
-        except Exception as e:
-            print(f"获取已发布图文信息失败: {e}")
-
-    def delete_published_article(self, article_id, index=0):
-        """
-        删除发布文章
-        """
-        try:
-            result = self.push_service.publish_service.delete_published_article(
-                article_id, index
-            )
-            print(f"删除发布文章结果: {result}")
-        except Exception as e:
-            print(f"删除发布文章失败: {e}")
-
-    def get_publish_status(self, publish_id):
-        """
-        发布状态查询
-        """
-        try:
-            result = self.push_service.publish_service.get_publish_status(publish_id)
-            print(f"查询发布状态结果: {result}")
-        except Exception as e:
-            print(f"查询发布状态失败: {e}")
-
-    def submit_publish(self, media_id):
-        """
-        发布草稿
-        """
-        try:
-            result = self.push_service.publish_service.submit_publish(media_id)
-            print(f"发布草稿结果: {result}")
-        except Exception as e:
-            print(f"发布草稿失败: {e}")
-
-    # Pixivision 相关方法
-    def get_pixivision_illustrations(self, start_page=1, end_page=1):
+    def get_pixivision_illustrations(
+        self, start_page=1, end_page=1, save=False, query=None
+    ):
         """
         获取 Pixivision 插画列表
         """
         try:
             illustrations = self.pixivision_service.get_illustration_list(
-                start_page, end_page
+                start_page, end_page, save, query
             )
-            print(f"获取到 {len(illustrations)} 个插画")
-            for i, illustration in enumerate(illustrations, 1):
-                print(f"{i}. {illustration['title']}")
-                print(f"   URL: {illustration['url']}")
-                if "article_id" in illustration and illustration["article_id"]:
-                    print(f"   文章ID: {illustration['article_id']}")
-                print(f"   图片: {illustration['image_url']}")
-                print(f"   标签: {', '.join(illustration['tags'])}")
-                print()
-            return illustrations
+            if illustrations:
+                print(f"找到 {len(illustrations)} 个插画:")
+                for i, illustration in enumerate(illustrations, 1):
+                    print(f"\n{i}. {illustration.get('title')}")
+                    print(f"   URL: {illustration.get('url')}")
+                    print(f"   标签: {', '.join(illustration.get('tags', []))}")
+                    print(f"   插画ID: {illustration.get('article_id', '未知')}")
+            else:
+                print("没有找到插画")
         except Exception as e:
-            print(f"获取 Pixivision 插画失败: {e}")
-            return []
+            print(f"获取插画列表失败: {e}")
 
-    def get_pixivision_illustration_detail(self, illustration_id):
+    def get_pixivision_illustration_detail(self, illustration_id, save=False):
         """
         获取 Pixivision 插画详情
         """
         try:
-            detail = self.pixivision_service.get_illustration_by_id(illustration_id)
-            if detail:
-                print(f"标题: {detail['title']}")
-                print(f"URL: {detail['url']}")
-                print(f"内容: {detail['content']}")
-                print(f"图片数量: {len(detail['images'])}")
-                for i, image_url in enumerate(detail["images"], 1):
-                    print(f"图片 {i}: {image_url}")
-                print(f"标签: {', '.join(detail['tags'])}")
-            return detail
-        except Exception as e:
-            print(f"获取 Pixivision 插画详情失败: {e}")
-            return None
-
-    def push_pixivision_illustration(self, illustration_id):
-        """
-        推送 Pixivision 插画
-        """
-        try:
-            # 获取插画详情
-            detail = self.pixivision_service.get_illustration_by_id(illustration_id)
-            if not detail:
-                print("获取插画详情失败")
-                return None
-
-            # 生成clientmsgid以避免重复推送
-            import uuid
-
-            clientmsgid = str(uuid.uuid4())
-
-            # 插入消息记录（待发送）
-            message_id = self.db_manager.insert_message(
-                task_id=clientmsgid,
-                title=detail["title"],
-                content=detail["content"],
-                status=0,
+            illustration = self.pixivision_service.get_illustration_by_id(
+                illustration_id, save
             )
-
-            # 推送为图文消息
-            if detail["images"]:
-                result = self.push_service.push_news_article(
-                    detail["title"],
-                    detail["content"],
-                    detail["images"][0],  # 使用第一张图片
-                    detail["url"],
-                    clientmsgid=clientmsgid,
-                    send_ignore=False,
-                )
-                print(f"推送 Pixivision 插画结果: {result}")
-
-                # 获取msg_id并更新到数据库
-                msg_id = result.get("msg_id")
-                if msg_id:
-                    self.db_manager.update_message_msg_id(
-                        message_id=message_id, msg_id=msg_id
-                    )
-                    # 设置35分钟后检查消息状态
-                    self._schedule_status_check(message_id=message_id, msg_id=msg_id)
-
-                # 更新消息状态为已发送
-                self.db_manager.update_message_status(
-                    message_id=message_id, status=1, send_time=datetime.now()
-                )
-                return result
+            if illustration:
+                print(f"插画详情:")
+                print(f"标题: {illustration.get('title')}")
+                print(f"URL: {illustration.get('url')}")
+                print(f"插画ID: {illustration.get('article_id', illustration_id)}")
+                print(f"描述: {illustration.get('description', '无')}")
+                print(f"标签: {', '.join(illustration.get('tags', []))}")
+                print(f"图片数量: {len(illustration.get('images', []))}")
             else:
-                print("插画没有图片")
-                return None
+                print("没有找到插画详情")
         except Exception as e:
-            print(f"推送 Pixivision 插画失败: {e}")
-            return None
+            print(f"获取插画详情失败: {e}")
 
-    def get_pixivision_ranking(self):
+    def get_pixivision_ranking(self, save=False):
         """
         获取 Pixivision 排行榜
         """
         try:
-            ranking = self.pixivision_service.get_ranking()
-            if ranking:
-                print("Pixivision 排行榜:")
-                print(f"共 {len(ranking)} 个插画")
-                print()
-                for i, item in enumerate(ranking, 1):
-                    print(f"{i}. {item['title']}")
-                    print(f"   URL: {item['url']}")
-                    if "article_id" in item and item["article_id"]:
-                        print(f"   文章ID: {item['article_id']}")
-                    print(f"   分类: {item['category']}")
-                    if item["thumbnail"]:
-                        print(f"   缩略图: {item['thumbnail']}")
-                    print()
+            illustrations = self.pixivision_service.get_ranking(save)
+            if illustrations:
+                print(f"排行榜 (共 {len(illustrations)} 个插画):")
+                for i, illustration in enumerate(illustrations, 1):
+                    print(f"\n{i}. {illustration.get('title')}")
+                    print(f"   URL: {illustration.get('url')}")
+                    print(f"   插画ID: {illustration.get('article_id', '未知')}")
             else:
-                print("获取排行榜失败")
+                print("没有找到排行榜数据")
         except Exception as e:
             print(f"获取排行榜失败: {e}")
 
-    def get_pixivision_recommendations(self):
+    def get_pixivision_recommendations(self, save=False):
         """
         获取 Pixivision 推荐榜
         """
         try:
-            recommendations = self.pixivision_service.get_recommendations()
-            if recommendations:
-                print("Pixivision 推荐榜:")
-                print(f"共 {len(recommendations)} 个插画")
-                print()
-                for i, item in enumerate(recommendations, 1):
-                    print(f"{i}. {item['title']}")
-                    print(f"   URL: {item['url']}")
-                    if "article_id" in item and item["article_id"]:
-                        print(f"   文章ID: {item['article_id']}")
-                    print(f"   分类: {item['category']}")
-                    if item["thumbnail"]:
-                        print(f"   缩略图: {item['thumbnail']}")
-                    print()
+            illustrations = self.pixivision_service.get_recommendations(save)
+            if illustrations:
+                print(f"推荐榜 (共 {len(illustrations)} 个插画):")
+                for i, illustration in enumerate(illustrations, 1):
+                    print(f"\n{i}. {illustration.get('title')}")
+                    print(f"   URL: {illustration.get('url')}")
+                    print(f"   插画ID: {illustration.get('article_id', '未知')}")
             else:
-                print("获取推荐榜失败")
+                print("没有找到推荐榜数据")
         except Exception as e:
             print(f"获取推荐榜失败: {e}")
 
+    def get_stored_pixivision_illustration(self, illustration_id):
+        """
+        从存储中获取 Pixivision 插画
+        """
+        try:
+            illustration = self.pixivision_service.get_stored_illustration(
+                illustration_id
+            )
+            if illustration:
+                print(f"插画详情:")
+                print(f"标题: {illustration.get('title')}")
+                print(f"URL: {illustration.get('url')}")
+                print(f"插画ID: {illustration.get('article_id', '未知')}")
+                print(f"描述: {illustration.get('description', '无')}")
+                print(f"标签: {', '.join(illustration.get('tags', []))}")
+                print(f"图片数量: {len(illustration.get('images', []))}")
+            else:
+                print("没有找到存储的插画")
+        except Exception as e:
+            print(f"获取存储的插画失败: {e}")
+
+    def set_schedule_time(self, start, end):
+        """
+        设置推送时间范围
+        """
+        try:
+            self.config.set_push_time_range(start, end)
+            print(f"推送时间范围已设置为: {start} - {end}")
+        except Exception as e:
+            print(f"设置时间范围失败: {e}")
+
+    def set_schedule_frequency(self, weekly_frequency):
+        """
+        设置推送频率
+        """
+        try:
+            self.config.set_weekly_push_frequency(weekly_frequency)
+            print(f"每周推送频率已设置为: {weekly_frequency} 次")
+        except Exception as e:
+            print(f"设置推送频率失败: {e}")
+
+    def view_schedule_config(self):
+        """
+        查看当前调度配置
+        """
+        try:
+            config = self.config.get_schedule_config()
+            time_range = config.get("time_range", {})
+            start_time = time_range.get("start")
+            end_time = time_range.get("end")
+
+            print("当前调度配置:")
+            print(f"推送时间范围: {start_time} - {end_time}")
+            print(f"每周推送频率: {config.get('weekly_frequency')} 次")
+            print(f"推送类型: {config.get('push_type')}")
+            print(f"是否启用推送: {'是' if config.get('enable_push') else '否'}")
+        except Exception as e:
+            print(f"查看调度配置失败: {e}")
+
+    def draft_switch(self, checkonly=0):
+        """
+        草稿箱开关设置
+        """
+        result = self.wechat_draft_service.draft_switch(checkonly)
+        if result:
+            print(f"草稿箱开关设置成功: {result}")
+        else:
+            print("草稿箱开关设置失败")
+
+    def draft_add(
+        self, title, author, content, digest, thumb_media_id, show_cover_pic=1
+    ):
+        """
+        新增草稿
+        """
+        articles = [
+            {
+                "title": title,
+                "author": author,
+                "digest": digest,
+                "content": content,
+                "thumb_media_id": thumb_media_id,
+                "show_cover_pic": show_cover_pic,
+                "need_open_comment": 0,
+                "only_fans_can_comment": 0,
+            }
+        ]
+        result = self.wechat_draft_service.draft_add(articles)
+        if result:
+            print(f"新增草稿成功: {result}")
+        else:
+            print("新增草稿失败")
+
+    def draft_list(self, offset=0, count=20):
+        """
+        获取草稿列表
+        """
+        result = self.wechat_draft_service.draft_batchget(offset, count)
+        if result and "item" in result:
+            print(f"共找到 {len(result['item'])} 条草稿:")
+            for i, draft in enumerate(result["item"], 1):
+                print(f"{i}. {draft.get('title')} (ID: {draft.get('media_id')})")
+                print(f"   作者: {draft.get('author')}")
+                print(
+                    f"   更新时间: {datetime.fromtimestamp(draft.get('update_time')).strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+                print()
+        else:
+            print("获取草稿列表失败")
+
+    def draft_count(self):
+        """
+        获取草稿总数
+        """
+        result = self.wechat_draft_service.draft_count()
+        if result and "total_count" in result:
+            print(f"草稿总数: {result['total_count']}")
+        else:
+            print("获取草稿总数失败")
+
+    def draft_delete(self, media_id):
+        """
+        删除草稿
+        """
+        result = self.wechat_draft_service.draft_delete(media_id)
+        if result:
+            print(f"删除草稿成功: {result}")
+        else:
+            print("删除草稿失败")
+
+    def draft_get(self, media_id):
+        """
+        获取草稿详情
+        """
+        result = self.wechat_draft_service.get_draft(media_id)
+        if result and "news_item" in result:
+            print(f"草稿详情:")
+            for i, item in enumerate(result["news_item"], 1):
+                print(f"{i}. {item.get('title')}")
+                print(f"   作者: {item.get('author')}")
+                print(f"   摘要: {item.get('digest')}")
+                print(f"   封面: {item.get('thumb_media_id')}")
+                print()
+        else:
+            print("获取草稿详情失败")
+
+    def draft_update(
+        self,
+        media_id,
+        index,
+        title,
+        author,
+        content,
+        digest,
+        thumb_media_id,
+        show_cover_pic=1,
+    ):
+        """
+        更新草稿
+        """
+        articles = [
+            {
+                "title": title,
+                "author": author,
+                "digest": digest,
+                "content": content,
+                "thumb_media_id": thumb_media_id,
+                "show_cover_pic": show_cover_pic,
+                "need_open_comment": 0,
+                "only_fans_can_comment": 0,
+            }
+        ]
+        result = self.wechat_draft_service.draft_update(media_id, index, articles)
+        if result:
+            print(f"更新草稿成功: {result}")
+        else:
+            print("更新草稿失败")
+
+    def draft_submit(self, media_id, title=None):
+        """
+        发布草稿
+        """
+        result = self.wechat_draft_service.draft_submit(media_id, title)
+        if result and "publish_id" in result:
+            print(f"发布草稿成功: {result}")
+        else:
+            print("发布草稿失败")
+
+    def draft_create(
+        self,
+        source,
+        title=None,
+        author=None,
+        compress=None,
+        digest=None,
+        content=None,
+        show_cover=1,
+        message_type="news",
+    ):
+        """
+        上传图片并创建草稿
+
+        参数:
+            source: 图片来源，本地文件夹路径或Pixivision文章ID
+            title: 草稿标题
+            author: 作者名称
+            compress: 是否压缩图片
+            digest: 图文消息摘要
+            content: 图文消息内容
+            show_cover: 是否显示封面图片
+            message_type: 消息类型，news(图文消息)或newspic(图片消息)
+        """
+        self.draft_service.create_draft(
+            source,
+            title,
+            author,
+            compress,
+            digest,
+            content,
+            show_cover,
+            message_type,
+        )
+
+    def run(self):
+        """
+        运行自动推送服务
+        """
+        print("微信公众号自动推送服务启动")
+        print("按 Ctrl+C 停止服务")
+
+        try:
+            # 启动调度器
+            self.schedule_manager.start()
+        except KeyboardInterrupt:
+            print("服务已停止")
+            self.schedule_manager.stop()
+
+    def run_schedule(self):
+        """
+        启动调度推送
+        """
+        self.run()
+
+    def run_once(self):
+        """
+        执行一次推送后关闭
+        """
+        try:
+            print("执行一次推送...")
+            # 直接执行推送任务
+            self._run_push_task()
+            print("推送执行完成，服务已关闭")
+        except Exception as e:
+            print(f"执行推送失败: {e}")
+
+    def handle_message(self, message):
+        """
+        处理接收到的消息
+        """
+        print(f"接收到消息: {message}")
+        # 这里可以添加消息处理逻辑
+
 
 def main():
-    app = WeChatAutoPush()
-
-    # 创建命令行参数解析器
-    parser = argparse.ArgumentParser(
-        prog="wx-auto-push",
-        description="微信公众号自动推送程序，支持定时推送动漫新闻和图片",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""示例:
-  # 立即执行一次推送任务
-  python main.py run
-
-  # 立即推送指定类型的内容
-  python main.py push text
-  python main.py push image
-
-  # 启动调度器
-  python main.py start
-
-  # 管理素材
-  python main.py material count
-  python main.py material list image
-  python main.py material get <media_id>
-  python main.py material upload image path/to/image.jpg
-  python main.py material delete <media_id>
-
-  # 管理菜单
-  python main.py menu create
-  python main.py menu get
-  python main.py menu info
-  python main.py menu delete
-
-  # 管理发布
-  python main.py publish list
-  python main.py publish get <article_id>
-  python main.py publish delete <article_id>
-  python main.py publish status <publish_id>
-  python main.py publish submit <media_id>
-
-  # Pixivision 管理
-  python main.py pixivision list 1 2
-  python main.py pixivision get 11525
-  python main.py pixivision push 11525
-  python main.py pixivision ranking
-  python main.py pixivision recommendations
-""",
-    )
-
-    # 添加子命令
+    parser = argparse.ArgumentParser(description="微信公众号自动推送工具")
     subparsers = parser.add_subparsers(dest="command", help="可用命令")
 
-    # run 命令
-    run_parser = subparsers.add_parser("run", help="立即执行一次推送任务")
-
-    # push 命令
-    push_parser = subparsers.add_parser("push", help="立即推送指定类型的内容")
+    # 推送相关命令
+    push_parser = subparsers.add_parser("push", help="推送消息")
     push_parser.add_argument(
-        "content_type",
-        nargs="?",
-        choices=["text", "image"],
-        help="推送类型: text, image",
+        "type",
+        choices=["text", "image", "news", "template", "pixivision"],
+        help="推送类型",
     )
 
-    # start 命令
-    start_parser = subparsers.add_parser("start", help="启动调度器")
+    # 配置相关命令
+    config_parser = subparsers.add_parser("config", help="配置管理")
+    config_parser.add_argument("action", choices=["set"], help="配置操作")
+    config_parser.add_argument("--app_id", help="微信公众号 App ID")
+    config_parser.add_argument("--app_secret", help="微信公众号 App Secret")
+    config_parser.add_argument("--template_id", help="模板消息 ID")
+    config_parser.add_argument("--preview_openid", help="预览 OpenID")
 
-    # stop 命令
-    stop_parser = subparsers.add_parser("stop", help="停止调度器")
-
-    # login 命令
-    login_parser = subparsers.add_parser(
-        "login", help="使用 appid 和 app secret 获取并存储 token"
+    # 调度管理命令
+    schedule_parser = subparsers.add_parser("schedule", help="调度管理")
+    schedule_subparsers = schedule_parser.add_subparsers(
+        dest="schedule_command", help="调度管理命令"
     )
 
-    # config 命令
-    config_parser = subparsers.add_parser(
-        "config", help="配置微信公众号，包括创建自定义菜单"
+    # 设置时间范围
+    schedule_time_parser = schedule_subparsers.add_parser(
+        "time", help="设置推送时间范围"
     )
-    config_subparsers = config_parser.add_subparsers(
-        dest="config_command", help="配置子命令"
+    schedule_time_parser.add_argument(
+        "--start", required=True, help="开始时间，格式：HH:MM"
     )
-
-    # config menu 命令
-    config_subparsers.add_parser("menu", help="根据配置文件创建自定义菜单")
-
-    # config set 命令
-    config_set_parser = config_subparsers.add_parser("set", help="设置微信公众号配置")
-    config_set_parser.add_argument("--app-id", help="微信公众号 App ID")
-    config_set_parser.add_argument("--app-secret", help="微信公众号 App Secret")
-    config_set_parser.add_argument("--template-id", help="微信公众号模板消息 ID")
-    config_set_parser.add_argument("--token", help="微信公众号 Token")
-    config_set_parser.add_argument(
-        "--preview-enabled", type=bool, help="是否启用预览功能"
-    )
-    config_set_parser.add_argument("--preview-towxname", help="预览接收者微信号")
-
-    # material 命令
-    material_parser = subparsers.add_parser("material", help="素材管理命令")
-    material_subparsers = material_parser.add_subparsers(
-        dest="material_command", help="素材管理子命令"
+    schedule_time_parser.add_argument(
+        "--end", required=True, help="结束时间，格式：HH:MM"
     )
 
-    # material count 命令
-    material_subparsers.add_parser("count", help="获取素材总数")
-
-    # material list 命令
-    material_list_parser = material_subparsers.add_parser("list", help="列出素材")
-    material_list_parser.add_argument(
-        "type", nargs="?", help="素材类型: image, voice, video, thumb"
+    # 设置频率
+    schedule_frequency_parser = schedule_subparsers.add_parser(
+        "frequency", help="设置推送频率"
+    )
+    schedule_frequency_parser.add_argument(
+        "weekly_frequency", type=int, help="每周推送次数"
     )
 
-    # material get 命令
-    material_get_parser = material_subparsers.add_parser("get", help="获取素材")
-    material_get_parser.add_argument("media_id", help="素材ID")
-
-    # material upload 命令
-    material_upload_parser = material_subparsers.add_parser("upload", help="上传素材")
-    material_upload_parser.add_argument(
-        "type", help="素材类型: image, voice, video, thumb"
-    )
-    material_upload_parser.add_argument("file_path", help="文件路径")
-    material_upload_parser.add_argument("title", nargs="?", help="素材标题")
-    material_upload_parser.add_argument("description", nargs="?", help="素材描述")
-
-    # material delete 命令
-    material_delete_parser = material_subparsers.add_parser("delete", help="删除素材")
-    material_delete_parser.add_argument("media_id", help="素材ID")
-
-    # menu 命令
-    menu_parser = subparsers.add_parser("menu", help="菜单管理命令")
-    menu_subparsers = menu_parser.add_subparsers(
-        dest="menu_command", help="菜单管理子命令"
+    # 查看当前调度配置
+    schedule_view_parser = schedule_subparsers.add_parser(
+        "view", help="查看当前调度配置"
     )
 
-    # menu create 命令
-    menu_subparsers.add_parser("create", help="根据配置文件创建自定义菜单")
+    # 启动调度推送
+    schedule_run_parser = schedule_subparsers.add_parser("run", help="启动调度推送")
 
-    # menu get 命令
-    menu_subparsers.add_parser("get", help="获取自定义菜单配置（仅API设置的菜单）")
-
-    # menu info 命令
-    menu_subparsers.add_parser(
-        "info", help="查询当前自定义菜单信息（包括API和官网设置的菜单）"
+    # 执行一次推送后关闭
+    schedule_run_once_parser = schedule_subparsers.add_parser(
+        "run-once", help="执行一次推送后关闭"
     )
 
-    # menu delete 命令
-    menu_subparsers.add_parser("delete", help="删除自定义菜单")
-
-    # publish 命令
-    publish_parser = subparsers.add_parser("publish", help="发布管理命令")
-    publish_subparsers = publish_parser.add_subparsers(
-        dest="publish_command", help="发布管理子命令"
-    )
-
-    # publish list 命令
-    publish_list_parser = publish_subparsers.add_parser(
-        "list", help="获取已发布的消息列表"
-    )
-    publish_list_parser.add_argument(
-        "offset", nargs="?", type=int, default=0, help="偏移量"
-    )
-    publish_list_parser.add_argument(
-        "count", nargs="?", type=int, default=10, help="数量"
-    )
-    publish_list_parser.add_argument(
-        "no_content", nargs="?", type=int, default=0, help="是否返回内容"
-    )
-
-    # publish get 命令
-    publish_get_parser = publish_subparsers.add_parser(
-        "get", help="获取已发布的图文信息"
-    )
-    publish_get_parser.add_argument("article_id", help="文章ID")
-
-    # publish delete 命令
-    publish_delete_parser = publish_subparsers.add_parser("delete", help="删除发布文章")
-    publish_delete_parser.add_argument("article_id", help="文章ID")
-    publish_delete_parser.add_argument(
-        "index", nargs="?", type=int, default=0, help="文章索引"
-    )
-
-    # publish status 命令
-    publish_status_parser = publish_subparsers.add_parser("status", help="查询发布状态")
-    publish_status_parser.add_argument("publish_id", help="发布ID")
-
-    # publish submit 命令
-    publish_submit_parser = publish_subparsers.add_parser("submit", help="发布草稿")
-    publish_submit_parser.add_argument("media_id", help="素材ID")
-
-    # pixivision 命令
-    pixivision_parser = subparsers.add_parser("pixivision", help="Pixivision 管理命令")
+    # Pixivision 管理命令
+    pixivision_parser = subparsers.add_parser("pixivision", help="Pixivision 管理")
     pixivision_subparsers = pixivision_parser.add_subparsers(
-        dest="pixivision_command", help="Pixivision 管理子命令"
+        dest="pixivision_command", help="Pixivision 管理命令"
     )
 
-    # pixivision list 命令
+    # 获取插画列表
     pixivision_list_parser = pixivision_subparsers.add_parser(
         "list", help="获取插画列表"
     )
     pixivision_list_parser.add_argument(
-        "start_page", nargs="?", type=int, default=1, help="开始页码"
+        "--start_page", type=int, default=1, help="开始页码"
     )
     pixivision_list_parser.add_argument(
-        "end_page", nargs="?", type=int, help="结束页码"
+        "--end_page", type=int, default=1, help="结束页码"
+    )
+    pixivision_list_parser.add_argument(
+        "--save", action="store_true", help="是否保存到存储"
+    )
+    pixivision_list_parser.add_argument("-q", "--query", help="搜索关键词")
+
+    # 获取插画详情
+    pixivision_detail_parser = pixivision_subparsers.add_parser(
+        "detail", help="获取插画详情"
+    )
+    pixivision_detail_parser.add_argument("illustration_id", help="插画 ID")
+    pixivision_detail_parser.add_argument(
+        "--save", action="store_true", help="是否保存到存储"
     )
 
-    # pixivision get 命令
-    pixivision_get_parser = pixivision_subparsers.add_parser("get", help="获取插画详情")
-    pixivision_get_parser.add_argument("illustration_id", help="插画ID")
-
-    # pixivision push 命令
-    pixivision_push_parser = pixivision_subparsers.add_parser(
-        "push", help="推送插画到微信"
-    )
-    pixivision_push_parser.add_argument("illustration_id", help="插画ID")
-
-    # pixivision ranking 命令
+    # 获取排行榜
     pixivision_ranking_parser = pixivision_subparsers.add_parser(
         "ranking", help="获取排行榜"
     )
+    pixivision_ranking_parser.add_argument(
+        "--save", action="store_true", help="是否保存到存储"
+    )
 
-    # pixivision recommendations 命令
+    # 获取推荐榜
     pixivision_recommendations_parser = pixivision_subparsers.add_parser(
         "recommendations", help="获取推荐榜"
     )
+    pixivision_recommendations_parser.add_argument(
+        "--save", action="store_true", help="是否保存到存储"
+    )
 
-    # 解析命令行参数
+    # 保存插画
+    pixivision_save_parser = pixivision_subparsers.add_parser("save", help="保存插画")
+    pixivision_save_parser.add_argument("illustration_id", help="插画 ID")
+
+    # 从存储中获取插画
+    pixivision_get_parser = pixivision_subparsers.add_parser(
+        "get", help="从存储中获取插画"
+    )
+    pixivision_get_parser.add_argument("illustration_id", help="插画 ID")
+
+    # 查看已存储的插画
+    pixivision_stored_parser = pixivision_subparsers.add_parser(
+        "stored", help="查看已存储的插画"
+    )
+    pixivision_stored_parser.add_argument(
+        "--limit", type=int, default=10, help="返回数量限制"
+    )
+    pixivision_stored_parser.add_argument(
+        "--offset", type=int, default=0, help="偏移量"
+    )
+
+    # 搜索插画
+    pixivision_search_parser = pixivision_subparsers.add_parser(
+        "search", help="搜索插画"
+    )
+    pixivision_search_parser.add_argument("keyword", help="搜索关键词")
+    pixivision_search_parser.add_argument(
+        "--limit", type=int, default=10, help="返回数量限制"
+    )
+
+    # 推送 Pixivision 插画
+    pixivision_push_parser = pixivision_subparsers.add_parser(
+        "push", help="推送 Pixivision 插画"
+    )
+
+    # 下载 Pixivision 插画图片
+    pixivision_download_parser = pixivision_subparsers.add_parser(
+        "download", help="下载 Pixivision 插画图片"
+    )
+    pixivision_download_parser.add_argument("illustration_id", help="插画ID")
+    pixivision_download_parser.add_argument(
+        "--output", help="输出目录（默认使用配置文件中的目录）"
+    )
+
+    # 草稿管理命令
+    draft_parser = subparsers.add_parser("draft", help="草稿管理")
+    draft_subparsers = draft_parser.add_subparsers(
+        dest="draft_command", help="草稿管理命令"
+    )
+
+    # 草稿开关设置
+    draft_switch_parser = draft_subparsers.add_parser("switch", help="草稿箱开关设置")
+    draft_switch_parser.add_argument(
+        "--checkonly", type=int, default=0, help="是否只检查状态"
+    )
+
+    # 新增草稿
+    draft_add_parser = draft_subparsers.add_parser("add", help="新增草稿")
+    draft_add_parser.add_argument("--title", required=True, help="标题")
+    draft_add_parser.add_argument("--author", required=True, help="作者")
+    draft_add_parser.add_argument("--content", required=True, help="内容")
+    draft_add_parser.add_argument("--digest", required=True, help="摘要")
+    draft_add_parser.add_argument(
+        "--thumb_media_id", required=True, help="封面图片 Media ID"
+    )
+    draft_add_parser.add_argument(
+        "--show_cover_pic", type=int, default=1, help="是否显示封面"
+    )
+
+    # 获取草稿列表
+    draft_list_parser = draft_subparsers.add_parser("list", help="获取草稿列表")
+    draft_list_parser.add_argument("--offset", type=int, default=0, help="偏移量")
+    draft_list_parser.add_argument("--count", type=int, default=20, help="数量")
+
+    # 获取草稿总数
+    draft_count_parser = draft_subparsers.add_parser("count", help="获取草稿总数")
+
+    # 删除草稿
+    draft_delete_parser = draft_subparsers.add_parser("delete", help="删除草稿")
+    draft_delete_parser.add_argument("media_id", help="草稿 Media ID")
+
+    # 获取草稿详情
+    draft_get_parser = draft_subparsers.add_parser("get", help="获取草稿详情")
+    draft_get_parser.add_argument("media_id", help="草稿 Media ID")
+
+    # 更新草稿
+    draft_update_parser = draft_subparsers.add_parser("update", help="更新草稿")
+    draft_update_parser.add_argument("media_id", help="草稿 Media ID")
+    draft_update_parser.add_argument("--index", type=int, default=0, help="文章索引")
+    draft_update_parser.add_argument("--title", required=True, help="标题")
+    draft_update_parser.add_argument("--author", required=True, help="作者")
+    draft_update_parser.add_argument("--content", required=True, help="内容")
+    draft_update_parser.add_argument("--digest", required=True, help="摘要")
+    draft_update_parser.add_argument(
+        "--thumb_media_id", required=True, help="封面图片 Media ID"
+    )
+    draft_update_parser.add_argument(
+        "--show_cover_pic", type=int, default=1, help="是否显示封面"
+    )
+
+    # 发布草稿
+    draft_submit_parser = draft_subparsers.add_parser("submit", help="发布草稿")
+    draft_submit_parser.add_argument("media_id", help="草稿 Media ID")
+    draft_submit_parser.add_argument("--title", help="自定义标题")
+
+    # 创建草稿
+    draft_create_parser = draft_subparsers.add_parser(
+        "create", help="上传图片并创建草稿"
+    )
+    draft_create_parser.add_argument(
+        "source", help="图片来源，本地文件夹路径或Pixivision文章ID"
+    )
+    draft_create_parser.add_argument("--title", help="草稿标题")
+    draft_create_parser.add_argument("--author", help="作者名称")
+    draft_create_parser.add_argument("--compress", type=bool, help="是否压缩图片")
+    draft_create_parser.add_argument("--digest", help="图文消息摘要")
+    draft_create_parser.add_argument("--content", help="图文消息内容")
+    draft_create_parser.add_argument(
+        "--show_cover", type=int, default=1, help="是否显示封面图片"
+    )
+    draft_create_parser.add_argument(
+        "--message_type",
+        choices=["news", "newspic"],
+        default="news",
+        help="消息类型，news(图文消息)或newspic(图片消息)",
+    )
+
     args = parser.parse_args()
 
-    # 处理命令
-    if args.command == "run":
-        # 立即执行一次
-        app.run_once()
-    elif args.command == "push":
-        # 立即推送指定类型
-        content_type = args.content_type
-        if content_type and content_type not in ["text", "image"]:
-            print("无效的推送类型，请使用: text, image")
-        else:
-            result = app.push_now(content_type)
-            print(f"立即推送任务执行完成，结果: {result}")
-    elif args.command == "start":
-        # 启动调度器
-        app.start_schedule()
-    elif args.command == "stop":
-        # 停止调度器
-        app.stop_schedule()
-    elif args.command == "login":
-        # 登录微信公众号，获取并存储 token
-        app.login()
+    app = WeChatAutoPush()
+
+    if args.command == "push":
+        if args.type == "text":
+            app.push_text_message()
+        elif args.type == "image":
+            app.push_image_message()
+        elif args.type == "news":
+            app.push_news_message()
+        elif args.type == "template":
+            app.push_template_message()
+        elif args.type == "pixivision":
+            app.push_pixivision_illustration()
     elif args.command == "config":
-        # 配置微信公众号
-        if args.config_command == "menu":
-            # 创建自定义菜单
-            print("配置微信公众号...")
-            app._initialize_wechat_menu()
-            print("微信公众号配置完成")
-        elif args.config_command == "set":
-            # 设置微信公众号配置
-            print("设置微信公众号配置...")
+        if args.action == "set":
             config_data = {}
             if args.app_id:
                 config_data["app_id"] = args.app_id
-                print(f"App ID: {args.app_id}")
             if args.app_secret:
                 config_data["app_secret"] = args.app_secret
-                print("App Secret: ******")
             if args.template_id:
                 config_data["template_id"] = args.template_id
-                print(f"Template ID: {args.template_id}")
-            if args.token:
-                config_data["token"] = args.token
-                print(f"Token: {args.token}")
-            if args.preview_enabled is not None:
-                config_data["preview_enabled"] = args.preview_enabled
-                print(f"Preview Enabled: {args.preview_enabled}")
-            if args.preview_towxname:
-                config_data["preview_towxname"] = args.preview_towxname
-                print(f"Preview ToWxName: {args.preview_towxname}")
+            if args.preview_openid:
+                config_data["preview_openid"] = args.preview_openid
+            app.save_wechat_config(config_data)
 
-            if config_data:
-                # 保存配置到 .env 文件
-                app.save_wechat_config(config_data)
-                print("配置设置成功！")
-            else:
-                print("没有设置任何配置")
-        else:
-            config_parser.print_help()
-    elif args.command == "material":
-        # 素材管理命令
-        if args.material_command == "count":
-            # 获取素材总数
-            app.get_material_count()
-        elif args.material_command == "list":
-            # 列出素材
-            material_type = args.type
-            app.list_materials(material_type)
-        elif args.material_command == "get":
-            # 获取素材
-            media_id = args.media_id
-            app.get_material(media_id)
-        elif args.material_command == "upload":
-            # 上传素材
-            material_type = args.type
-            file_path = args.file_path
-            title = args.title
-            description = args.description
-            app.upload_material(material_type, file_path, title, description)
-        elif args.material_command == "delete":
-            # 删除素材
-            media_id = args.media_id
-            app.delete_material(media_id)
-        else:
-            material_parser.print_help()
-    elif args.command == "menu":
-        # 菜单管理命令
-        if args.menu_command == "create":
-            # 创建自定义菜单
-            wechat_config = app.config.get_wechat_config()
-            menu_config = wechat_config.get("menu", {})
-            app.push_service.menu_service.create_menu(menu_config)
-        elif args.menu_command == "get":
-            # 获取自定义菜单配置（仅API设置的菜单）
-            result = app.push_service.menu_service.get_menu()
-            print(f"获取自定义菜单配置结果: {result}")
-        elif args.menu_command == "info":
-            # 查询当前自定义菜单信息（包括API和官网设置的菜单）
-            result = app.push_service.menu_service.get_current_selfmenu_info()
-            print(f"查询自定义菜单信息结果: {result}")
-        elif args.menu_command == "delete":
-            # 删除自定义菜单
-            result = app.push_service.menu_service.delete_menu()
-            print(f"删除自定义菜单结果: {result}")
-        else:
-            menu_parser.print_help()
-    elif args.command == "publish":
-        # 发布管理命令
-        if args.publish_command == "list":
-            # 获取已发布的消息列表
-            offset = args.offset
-            count = args.count
-            no_content = args.no_content
-            app.get_published_news_list(offset, count, no_content)
-        elif args.publish_command == "get":
-            # 获取已发布的图文信息
-            article_id = args.article_id
-            app.get_published_article(article_id)
-        elif args.publish_command == "delete":
-            # 删除发布文章
-            article_id = args.article_id
-            index = args.index
-            app.delete_published_article(article_id, index)
-        elif args.publish_command == "status":
-            # 查询发布状态
-            publish_id = args.publish_id
-            app.get_publish_status(publish_id)
-        elif args.publish_command == "submit":
-            # 发布草稿
-            media_id = args.media_id
-            app.submit_publish(media_id)
-        else:
-            publish_parser.print_help()
     elif args.command == "pixivision":
-        # Pixivision 管理命令
         if args.pixivision_command == "list":
-            # 获取插画列表
-            start_page = args.start_page
-            end_page = args.end_page if args.end_page else start_page
-            app.get_pixivision_illustrations(start_page, end_page)
-        elif args.pixivision_command == "get":
-            # 获取插画详情
-            illustration_id = args.illustration_id
-            app.get_pixivision_illustration_detail(illustration_id)
-        elif args.pixivision_command == "push":
-            # 推送插画
-            illustration_id = args.illustration_id
-            app.push_pixivision_illustration(illustration_id)
+            app.get_pixivision_illustrations(
+                args.start_page, args.end_page, args.save, args.query
+            )
+        elif args.pixivision_command == "detail":
+            app.get_pixivision_illustration_detail(args.illustration_id, args.save)
         elif args.pixivision_command == "ranking":
-            # 获取排行榜
-            app.get_pixivision_ranking()
+            app.get_pixivision_ranking(args.save)
         elif args.pixivision_command == "recommendations":
-            # 获取推荐榜
-            app.get_pixivision_recommendations()
+            app.get_pixivision_recommendations(args.save)
+        elif args.pixivision_command == "save":
+            app.store_pixivision_illustration(args.illustration_id)
+        elif args.pixivision_command == "get":
+            app.get_stored_pixivision_illustration(args.illustration_id)
+        elif args.pixivision_command == "stored":
+            app.get_stored_pixivision_illustrations(args.limit, args.offset)
+        elif args.pixivision_command == "search":
+            app.search_pixivision_illustrations(args.keyword, args.limit)
+        elif args.pixivision_command == "push":
+            app.push_pixivision_illustration()
+        elif args.pixivision_command == "download":
+            app.download_pixivision_illustration(args.illustration_id, args.output)
         else:
+            # 没有提供子命令，打印帮助信息
             pixivision_parser.print_help()
+    elif args.command == "schedule":
+        if args.schedule_command == "time":
+            app.set_schedule_time(args.start, args.end)
+        elif args.schedule_command == "frequency":
+            app.set_schedule_frequency(args.weekly_frequency)
+        elif args.schedule_command == "view":
+            app.view_schedule_config()
+        elif args.schedule_command == "run":
+            app.run_schedule()
+        elif args.schedule_command == "run-once":
+            app.run_once()
+        else:
+            # 没有提供子命令，打印帮助信息
+            schedule_parser.print_help()
+    elif args.command == "draft":
+        if args.draft_command == "switch":
+            app.draft_switch(args.checkonly)
+        elif args.draft_command == "add":
+            app.draft_add(
+                args.title,
+                args.author,
+                args.content,
+                args.digest,
+                args.thumb_media_id,
+                args.show_cover_pic,
+            )
+        elif args.draft_command == "list":
+            app.draft_list(args.offset, args.count)
+        elif args.draft_command == "count":
+            app.draft_count()
+        elif args.draft_command == "delete":
+            app.draft_delete(args.media_id)
+        elif args.draft_command == "get":
+            app.draft_get(args.media_id)
+        elif args.draft_command == "update":
+            app.draft_update(
+                args.media_id,
+                args.index,
+                args.title,
+                args.author,
+                args.content,
+                args.digest,
+                args.thumb_media_id,
+                args.show_cover_pic,
+            )
+        elif args.draft_command == "submit":
+            app.draft_submit(args.media_id, args.title)
+        elif args.draft_command == "create":
+            app.draft_create(
+                args.source,
+                args.title,
+                args.author,
+                args.compress,
+                args.digest,
+                args.content,
+                args.show_cover,
+                args.message_type,
+            )
+        else:
+            # 没有提供子命令，打印帮助信息
+            draft_parser.print_help()
     else:
-        # 没有指定命令，显示帮助信息
+        # 没有提供命令，显示帮助消息
         parser.print_help()
 
 

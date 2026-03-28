@@ -7,6 +7,10 @@ config.json
 # 缓存目录
 cache/
 
+# 存储相关
+data.db
+/data
+
 # Docker相关
 # Dockerfile
 # docker-compose.yml

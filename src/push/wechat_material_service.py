@@ -49,7 +49,7 @@ class WeChatMaterialService:
         """
         获取临时素材
         """
-        return self.client.get_media(media_id)
+        return self.client.get_temporary_material(media_id)
 
     def upload_news_image(self, image_file):
         """
@@ -74,3 +74,9 @@ class WeChatMaterialService:
         上传图文消息素材
         """
         return self.client.upload_news_media(articles)
+
+    def upload_local_image_media(self, image_path):
+        """
+        上传本地图片到临时素材
+        """
+        return self.client.upload_temp_media("image", image_path)

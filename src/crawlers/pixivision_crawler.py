@@ -1,11 +1,55 @@
 from .base_crawler import BaseCrawler
 from bs4 import BeautifulSoup
 import requests
+import time
 
 
 class PixivisionCrawler(BaseCrawler):
-    def __init__(self, urls, proxy_config=None):
+    def __init__(self, urls, proxy_config=None, request_config=None):
         super().__init__(urls, proxy_config)
+        self.request_config = request_config or {}
+
+    def crawl_one(self):
+        """
+        爬取 Pixivision 页面
+        """
+        url = self.urls[0]
+        try:
+            response = requests.get(
+                url, headers=self._get_headers(), proxies=self._get_proxies()
+            )
+            response.raise_for_status()
+            return self.parse(response.text, url)
+        except Exception as e:
+            print(f"爬取 {url} 失败: {e}")
+            return None
+
+    def crawl_multi(self):
+        """
+        爬取 Pixivision 页面,包含多个urls
+        """
+        all_results = []
+        for i, url in enumerate(self.urls):
+            try:
+                # 添加请求延迟（第一次不延迟）
+                if i > 0 and self.request_config:
+                    delay = self.request_config.get("delay", 1)
+                    if delay > 0:
+                        time.sleep(delay)
+
+                response = requests.get(
+                    url, headers=self._get_headers(), proxies=self._get_proxies()
+                )
+                response.raise_for_status()
+                result = self.parse(response.text, url)
+                if result:
+                    if isinstance(result, list):
+                        all_results.extend(result)
+                    else:
+                        all_results.append(result)
+            except Exception as e:
+                print(f"爬取 {url} 失败: {e}")
+        return all_results
 
     def parse(self, html, url):
         if "c/illustration" in url:
@@ -105,7 +149,7 @@ class PixivisionCrawler(BaseCrawler):
                 image_items.append(img_url)
 
         # 然后获取插画图片
-        for container in soup.select("_clickable-image-container.fit-inner"):
+        for container in soup.select("._clickable-image-container.fit-inner"):
             img = container.select_one("img")
             if img:
                 img_url = img.get("src")
@@ -114,14 +158,22 @@ class PixivisionCrawler(BaseCrawler):
                     if not img_url.startswith("http"):
                         img_url = f"https://www.pixivision.net{img_url}"
                     image_items.append(img_url)
-
         # 获取标签
         tag_elements = soup.select(".tls__list-item")
         tags = [tag.text.strip() for tag in tag_elements]
 
+        # 提取 article id
+        article_id = ""
+        import re
+
+        match = re.search(r"/a/(\d+)", url)
+        if match:
+            article_id = match.group(1)
+
         return {
             "title": title,
             "url": url,
+            "article_id": article_id,
             "content": content,
             "images": image_items,
             "tags": tags,
@@ -214,16 +266,19 @@ class PixivisionCrawler(BaseCrawler):
 
         return illustrations
 
-    def crawl_pages(self, base_url, start_page, end_page):
+    def crawl_pages(self, base_url, start_page, end_page, query=None):
         """
         爬取多个页面的插画列表
         """
         all_illustrations = []
 
         for page in range(start_page, end_page + 1):
-            page_url = f"{base_url}?p={page}"
+            if query:
+                page_url = f"{base_url}?q={query}&p={page}"
+            else:
+                page_url = f"{base_url}?p={page}"
             try:
-                response = self.session.get(
+                response = requests.get(
                     page_url, headers=self._get_headers(), proxies=self._get_proxies()
                 )
                 response.raise_for_status()
