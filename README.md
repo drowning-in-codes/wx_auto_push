@@ -416,7 +416,7 @@ uv run python main.py pixivision [list|get|push] [args]
 - `push`：推送指定插画到微信，需要提供插画ID
 
 ## 注意事项
-注意，根据目前公众号平台,许多接口(例如群发)都需要认证。具体请查看(群发接口)["https://developers.weixin.qq.com/doc/service/api/notify/message/api_sendall.html"]。
+注意，根据目前公众号平台,许多接口(例如群发)都需要认证。具体请查看[群发接口]("https://developers.weixin.qq.com/doc/service/api/notify/message/api_sendall.html").
 而企业认证需要缴年费，这也是微信赚钱的一种方式吧。
 
 1. **微信公众号配置**：
