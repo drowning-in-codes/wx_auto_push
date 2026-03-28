@@ -8,7 +8,7 @@ config.json
 cache/
 
 # 存储相关
-data.db
+*.db
 /data
 
 # Docker相关
