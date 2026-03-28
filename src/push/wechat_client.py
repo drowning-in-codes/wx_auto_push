@@ -167,13 +167,48 @@ class WeChatClient:
     def upload_news_image(self, image_file):
         """
         上传图文消息内图片，返回图片URL
+        注意：该接口所上传的图片，不占用公众号的素材库中图片数量的100000个的限制
+             图片仅支持jpg/png格式，大小必须在1MB以下
         """
         access_token = self.get_access_token()
         url = f"{self.base_url}/cgi-bin/media/uploadimg?access_token={access_token}"
 
-        files = {"media": open(image_file, "rb")}
-        response = self._request("POST", url, files=files)
-        return response.json()
+        with open(image_file, "rb") as f:
+            files = {"media": f}
+            response = self._request("POST", url, files=files)
+            return response.json()
+
+    def upload_news_image_from_url(self, image_url):
+        """
+        从URL下载图片并上传到图文消息内图片接口，返回图片URL
+        注意：该接口所上传的图片，不占用公众号的素材库中图片数量的100000个的限制
+             图片仅支持jpg/png格式，大小必须在1MB以下
+        """
+        import tempfile
+        import shutil
+
+        access_token = self.get_access_token()
+        upload_url = f"{self.base_url}/cgi-bin/media/uploadimg?access_token={access_token}"
+
+        # 下载图片到临时文件
+        response = requests.get(image_url, stream=True)
+        if response.status_code == 200:
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_file:
+                shutil.copyfileobj(response.raw, temp_file)
+                temp_file_path = temp_file.name
+
+            try:
+                # 上传图片
+                with open(temp_file_path, "rb") as f:
+                    files = {"media": f}
+                    upload_response = self._request("POST", upload_url, files=files)
+                    return upload_response.json()
+            finally:
+                # 删除临时文件
+                if os.path.exists(temp_file_path):
+                    os.remove(temp_file_path)
+        else:
+            raise Exception(f"下载图片失败: {image_url}")
 
     def preview_message(self, msg_type, content, openid):
         """
@@ -445,17 +480,6 @@ class WeChatClient:
         )
         data = {"media_id": media_id}
         response = self._request("POST", url, json=data)
-        return response.json()
-
-    def upload_news_image(self, image_file):
-        """
-        上传图文消息内图片
-        """
-        access_token = self.get_access_token()
-        url = f"{self.base_url}/cgi-bin/media/uploadimg?access_token={access_token}"
-
-        files = {"media": open(image_file, "rb")}
-        response = self._request("POST", url, files=files)
         return response.json()
 
     # 临时素材相关方法

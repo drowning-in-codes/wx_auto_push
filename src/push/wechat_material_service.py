@@ -57,6 +57,12 @@ class WeChatMaterialService:
         """
         return self.client.upload_news_image(image_file)
 
+    def upload_news_image_from_url(self, image_url):
+        """
+        从URL下载图片并上传到图文消息内图片接口
+        """
+        return self.client.upload_news_image_from_url(image_url)
+
     def upload_image_media(self, image_url):
         """
         上传图片到临时素材
