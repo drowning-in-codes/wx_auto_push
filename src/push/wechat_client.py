@@ -68,12 +68,14 @@ class WeChatClient:
                 kwargs["json"] = data
 
         # 处理代理配置
-        proxies = None
         if self.proxy_config.get("enabled"):
             proxies = {
                 "http": self.proxy_config.get("http_proxy"),
                 "https": self.proxy_config.get("https_proxy"),
             }
+        else:
+            # 显式禁用代理，确保不使用系统环境中的代理
+            proxies = {"http": None, "https": None}
         kwargs["proxies"] = proxies
 
         # 发送请求
@@ -188,7 +190,9 @@ class WeChatClient:
         import shutil
 
         access_token = self.get_access_token()
-        upload_url = f"{self.base_url}/cgi-bin/media/uploadimg?access_token={access_token}"
+        upload_url = (
+            f"{self.base_url}/cgi-bin/media/uploadimg?access_token={access_token}"
+        )
 
         # 下载图片到临时文件
         response = requests.get(image_url, stream=True)

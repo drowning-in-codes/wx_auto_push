@@ -9,7 +9,9 @@ class PixivisionService:
         """
         self.base_url = "https://www.pixivision.net/zh/c/illustration"
         self.proxy_config = proxy_config
-        self.crawler = CrawlerFactory.create_crawler("pixivision", [self.base_url], proxy_config)
+        self.crawler = CrawlerFactory.create_crawler(
+            "pixivision", [self.base_url], proxy_config
+        )
 
     def get_illustration_list(self, start_page=1, end_page=1):
         """
@@ -27,8 +29,46 @@ class PixivisionService:
         :return: 插画详情
         """
         # 创建一个临时爬虫实例来爬取详情页
-        detail_crawler = CrawlerFactory.create_crawler("pixivision", [illustration_url], self.proxy_config)
+        detail_crawler = CrawlerFactory.create_crawler(
+            "pixivision", [illustration_url], self.proxy_config
+        )
         return detail_crawler.crawl()
+
+    def get_ranking(self):
+        """
+        获取排行榜（第一个 sidebar-contents-container）
+        :return: 排行榜插画列表
+        """
+        ranking_url = "https://www.pixivision.net/zh/"
+        ranking_crawler = CrawlerFactory.create_crawler(
+            "pixivision", [ranking_url], self.proxy_config
+        )
+        # 直接调用 _parse_ranking_list 方法并指定容器索引为 0（排行榜）
+        response = ranking_crawler.session.get(
+            ranking_url,
+            headers=ranking_crawler._get_headers(),
+            proxies=ranking_crawler._get_proxies(),
+        )
+        response.raise_for_status()
+        return ranking_crawler._parse_ranking_list(response.text, ranking_url, 0)
+
+    def get_recommendations(self):
+        """
+        获取推荐榜（第二个 sidebar-contents-container）
+        :return: 推荐榜插画列表
+        """
+        ranking_url = "https://www.pixivision.net/zh/"
+        ranking_crawler = CrawlerFactory.create_crawler(
+            "pixivision", [ranking_url], self.proxy_config
+        )
+        # 直接调用 _parse_ranking_list 方法并指定容器索引为 1（推荐榜）
+        response = ranking_crawler.session.get(
+            ranking_url,
+            headers=ranking_crawler._get_headers(),
+            proxies=ranking_crawler._get_proxies(),
+        )
+        response.raise_for_status()
+        return ranking_crawler._parse_ranking_list(response.text, ranking_url, 1)
 
     def save_illustrations(self, illustrations, storage=None):
         """

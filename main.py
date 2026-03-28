@@ -710,6 +710,8 @@ class WeChatAutoPush:
             for i, illustration in enumerate(illustrations, 1):
                 print(f"{i}. {illustration['title']}")
                 print(f"   URL: {illustration['url']}")
+                if "article_id" in illustration and illustration["article_id"]:
+                    print(f"   文章ID: {illustration['article_id']}")
                 print(f"   图片: {illustration['image_url']}")
                 print(f"   标签: {', '.join(illustration['tags'])}")
                 print()
@@ -794,6 +796,54 @@ class WeChatAutoPush:
             print(f"推送 Pixivision 插画失败: {e}")
             return None
 
+    def get_pixivision_ranking(self):
+        """
+        获取 Pixivision 排行榜
+        """
+        try:
+            ranking = self.pixivision_service.get_ranking()
+            if ranking:
+                print("Pixivision 排行榜:")
+                print(f"共 {len(ranking)} 个插画")
+                print()
+                for i, item in enumerate(ranking, 1):
+                    print(f"{i}. {item['title']}")
+                    print(f"   URL: {item['url']}")
+                    if "article_id" in item and item["article_id"]:
+                        print(f"   文章ID: {item['article_id']}")
+                    print(f"   分类: {item['category']}")
+                    if item["thumbnail"]:
+                        print(f"   缩略图: {item['thumbnail']}")
+                    print()
+            else:
+                print("获取排行榜失败")
+        except Exception as e:
+            print(f"获取排行榜失败: {e}")
+
+    def get_pixivision_recommendations(self):
+        """
+        获取 Pixivision 推荐榜
+        """
+        try:
+            recommendations = self.pixivision_service.get_recommendations()
+            if recommendations:
+                print("Pixivision 推荐榜:")
+                print(f"共 {len(recommendations)} 个插画")
+                print()
+                for i, item in enumerate(recommendations, 1):
+                    print(f"{i}. {item['title']}")
+                    print(f"   URL: {item['url']}")
+                    if "article_id" in item and item["article_id"]:
+                        print(f"   文章ID: {item['article_id']}")
+                    print(f"   分类: {item['category']}")
+                    if item["thumbnail"]:
+                        print(f"   缩略图: {item['thumbnail']}")
+                    print()
+            else:
+                print("获取推荐榜失败")
+        except Exception as e:
+            print(f"获取推荐榜失败: {e}")
+
 
 def main():
     app = WeChatAutoPush()
@@ -834,10 +884,12 @@ def main():
   python main.py publish status <publish_id>
   python main.py publish submit <media_id>
 
-  # 管理 Pixivision 插画
+  # Pixivision 管理
   python main.py pixivision list 1 2
   python main.py pixivision get 11525
   python main.py pixivision push 11525
+  python main.py pixivision ranking
+  python main.py pixivision recommendations
 """,
     )
 
@@ -1009,6 +1061,16 @@ def main():
     )
     pixivision_push_parser.add_argument("illustration_id", help="插画ID")
 
+    # pixivision ranking 命令
+    pixivision_ranking_parser = pixivision_subparsers.add_parser(
+        "ranking", help="获取排行榜"
+    )
+
+    # pixivision recommendations 命令
+    pixivision_recommendations_parser = pixivision_subparsers.add_parser(
+        "recommendations", help="获取推荐榜"
+    )
+
     # 解析命令行参数
     args = parser.parse_args()
 
@@ -1160,6 +1222,12 @@ def main():
             # 推送插画
             illustration_id = args.illustration_id
             app.push_pixivision_illustration(illustration_id)
+        elif args.pixivision_command == "ranking":
+            # 获取排行榜
+            app.get_pixivision_ranking()
+        elif args.pixivision_command == "recommendations":
+            # 获取推荐榜
+            app.get_pixivision_recommendations()
         else:
             pixivision_parser.print_help()
     else:

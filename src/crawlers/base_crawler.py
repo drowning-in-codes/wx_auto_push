@@ -7,6 +7,11 @@ class BaseCrawler:
     def __init__(self, urls, proxy_config=None):
         self.urls = urls
         self.proxy_config = proxy_config or {}
+        # 创建 Session 并配置代理设置
+        self.session = requests.Session()
+        # 如果代理未启用，禁用系统环境变量中的代理设置
+        if not self.proxy_config.get("enabled"):
+            self.session.trust_env = False
 
     def get_random_url(self):
         return random.choice(self.urls)
@@ -25,7 +30,7 @@ class BaseCrawler:
     def crawl(self):
         url = self.get_random_url()
         try:
-            response = requests.get(
+            response = self.session.get(
                 url, headers=self._get_headers(), proxies=self._get_proxies()
             )
             response.raise_for_status()

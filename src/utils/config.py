@@ -150,18 +150,22 @@ class Config:
             }
 
         # 代理配置
+        proxy_enabled = False
         if os.getenv("PROXY_ENABLED"):
             if "proxy" not in config:
                 config["proxy"] = {}
-            config["proxy"]["enabled"] = os.getenv("PROXY_ENABLED").lower() == "true"
-        if os.getenv("HTTP_PROXY"):
-            if "proxy" not in config:
-                config["proxy"] = {}
-            config["proxy"]["http_proxy"] = os.getenv("HTTP_PROXY")
-        if os.getenv("HTTPS_PROXY"):
-            if "proxy" not in config:
-                config["proxy"] = {}
-            config["proxy"]["https_proxy"] = os.getenv("HTTPS_PROXY")
+            proxy_enabled = os.getenv("PROXY_ENABLED").lower() == "true"
+            config["proxy"]["enabled"] = proxy_enabled
+        # 只有在启用代理时才加载代理地址
+        if proxy_enabled:
+            if os.getenv("HTTP_PROXY"):
+                if "proxy" not in config:
+                    config["proxy"] = {}
+                config["proxy"]["http_proxy"] = os.getenv("HTTP_PROXY")
+            if os.getenv("HTTPS_PROXY"):
+                if "proxy" not in config:
+                    config["proxy"] = {}
+                config["proxy"]["https_proxy"] = os.getenv("HTTPS_PROXY")
 
         # 推送配置
         if os.getenv("IMAGE_PUBLISH_TYPE"):
