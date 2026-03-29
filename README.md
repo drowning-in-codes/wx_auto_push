@@ -12,6 +12,7 @@
 - **大模型集成**：可选择性使用API调用大模型改写内容
 - **微信推送**：支持图文消息和图片消息的推送
 - **智能调度**：根据配置文件定义每周发布频次，自动执行推送任务
+- **调度上传**：支持定时从随机Pixivision插画创建草稿，自动记录已上传的article id避免重复
 - **数据库记录**：每次执行任务后，在数据库中插入消息记录，包含详细信息和状态
 - **消息状态检查**：35分钟后自动检查消息发送状态并更新数据库
 - **预览消息**：发送前可选择将消息发送给公众号主人进行预览
@@ -316,8 +317,14 @@ python main.py schedule run
 # 执行一次推送任务后退出
 python main.py schedule run-once
 
+# 启动调度上传（从随机Pixivision插画创建草稿）
+python main.py schedule upload --start_page 1 --end_page 3
+
+# 执行一次上传任务后退出
+python main.py schedule upload-once --start_page 1 --end_page 3
+
 # 使用uv
-uv run python main.py schedule [time|frequency|view|run|run-once] [args]
+uv run python main.py schedule [time|frequency|view|run|run-once|upload|upload-once] [args]
 ```
 
 **参数说明：**
@@ -330,6 +337,17 @@ uv run python main.py schedule [time|frequency|view|run|run-once] [args]
 - `view`：查看当前调度配置
 - `run`：启动调度器，持续运行直到手动停止
 - `run-once`：执行一次推送任务后退出
+- `upload`：启动调度上传，从随机Pixivision插画创建草稿
+  - `--start_page`：开始页码，默认 1
+  - `--end_page`：结束页码，默认 3
+  - `--title`：草稿标题（可选）
+  - `--author`：作者名称（可选）
+  - `--compress`：是否压缩图片（可选）
+  - `--digest`：图文消息摘要（可选）
+  - `--content`：图文消息内容（可选）
+  - `--show_cover`：是否显示封面图片，默认 1
+  - `--message_type`：消息类型，news(图文消息)或newspic(图片消息)，默认 newspic
+- `upload-once`：执行一次上传任务后退出，参数同upload
 
 **配置项：**
 
@@ -346,6 +364,21 @@ uv run python main.py schedule [time|frequency|view|run|run-once] [args]
   }
 }
 ```
+
+**上传历史：**
+
+使用 `schedule upload` 命令时，系统会自动创建一个 `uploaded_articles.json` 文件来记录已上传的article id，避免重复上传。该文件包含以下信息：
+
+```json
+{
+  "12345": {
+    "upload_time": "2026-03-29T10:30:00",
+    "draft_media_id": "media_id_12345"
+  }
+}
+```
+
+如果需要清空上传历史，可以删除 `uploaded_articles.json` 文件。
 
 ### 6. 登录微信公众号
 
