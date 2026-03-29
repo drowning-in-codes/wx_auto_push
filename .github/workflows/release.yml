@@ -11,6 +11,12 @@ jobs:
     strategy:
       matrix:
         os: [windows-latest]
+   
+    # --- 权限写在这里 ---
+    permissions:
+      contents: write  # 允许读取代码并回写 Release 附件
+      packages: write  # (可选) 如果你需要推送到 GitHub Packages
+
     steps:
       - uses: actions/checkout@v4
 
