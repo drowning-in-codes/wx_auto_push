@@ -21,8 +21,7 @@ jobs:
         # 只有在 Windows 运行时才执行打包 exe
         if: matrix.os == 'windows-latest'
         run: |
-          uv pip install pyinstaller
-          uv run pyinstaller --onefile main.py --name wx-auto-push
+          uvx pyinstaller --onefile --clean main.py --name wx-auto-push
 
       - name: Build Python Package (Source & Wheel)
         if: matrix.os == 'windows-latest'
