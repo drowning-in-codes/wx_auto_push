@@ -964,6 +964,7 @@ def main():
     )
     schedule_upload_parser.add_argument(
         "--message_type",
+        "--message-type",
         choices=["news", "newspic"],
         default=None,
         help="消息类型，news(图文消息)或newspic(图片消息)",
@@ -994,6 +995,7 @@ def main():
     )
     schedule_upload_once_parser.add_argument(
         "--message_type",
+        "--message-type",
         choices=["news", "newspic"],
         default=None,
         help="消息类型，news(图文消息)或newspic(图片消息)",
@@ -1167,6 +1169,7 @@ def main():
     )
     draft_create_parser.add_argument(
         "--message_type",
+        "--message-type",
         choices=["news", "newspic"],
         default="newspic",
         help="消息类型，news(图文消息)或newspic(图片消息)",
