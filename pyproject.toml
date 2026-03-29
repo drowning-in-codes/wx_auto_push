@@ -11,5 +11,6 @@ dependencies = [
     "wechatpy",
     "apscheduler",
     "redis",
-    "python-dotenv"
+    "python-dotenv",
+    "pytest>=9.0.2",
 ]

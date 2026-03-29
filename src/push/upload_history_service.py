@@ -31,11 +31,27 @@ class UploadHistoryService:
     def _save_data(self):
         """保存上传历史数据"""
         try:
-            with open(self.file_path, "w", encoding="utf-8") as f:
+            # 确保目录存在
+            directory = os.path.dirname(self.file_path)
+            if directory:
+                os.makedirs(directory, exist_ok=True)
+
+            # 使用临时文件进行原子写入
+            temp_file_path = f"{self.file_path}.tmp"
+            with open(temp_file_path, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=2)
+
+            # 原子替换文件
+            os.replace(temp_file_path, self.file_path)
             logger.info(f"上传历史已保存到 {self.file_path}")
         except Exception as e:
             logger.error(f"保存上传历史失败: {e}")
+            # 清理临时文件
+            try:
+                if os.path.exists(f"{self.file_path}.tmp"):
+                    os.remove(f"{self.file_path}.tmp")
+            except:
+                pass
 
     def is_uploaded(self, article_id):
         """

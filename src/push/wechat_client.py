@@ -672,10 +672,20 @@ class WeChatClient:
         新增草稿
         参考文档：https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_add.html
         """
+        import json
+
         access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/draft/add?access_token={access_token}"
         data = {"articles": articles}
-        response = self._request("POST", url, json=data)
+
+        # 手动序列化JSON，确保中文字符不被转义
+        json_data = json.dumps(data, ensure_ascii=False)
+        response = self._request(
+            "POST",
+            url,
+            data=json_data.encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
         return response.json()
 
     def draft_batchget(self, offset=0, count=10, no_content=0):
@@ -726,8 +736,18 @@ class WeChatClient:
         更新草稿
         参考文档：https://developers.weixin.qq.com/doc/subscription/api/draftbox/draftmanage/api_draft_update.html
         """
+        import json
+
         access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/draft/update?access_token={access_token}"
         data = {"media_id": media_id, "index": index, "articles": articles}
-        response = self._request("POST", url, json=data)
+
+        # 手动序列化JSON，确保中文字符不被转义
+        json_data = json.dumps(data, ensure_ascii=False)
+        response = self._request(
+            "POST",
+            url,
+            data=json_data.encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
         return response.json()

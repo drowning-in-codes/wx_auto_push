@@ -32,6 +32,16 @@ class DownloadAndDraftService:
         self.download_config = config.get_download_config()
         self.upload_history = UploadHistoryService()
 
+    def _get_pixiv_headers(self):
+        return {
+            "Referer": "https://www.pixiv.net/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+        }
+
     def _download_single_image(self, image_url, index, total, max_retries=3):
         """
         下载单张图片，支持重试
@@ -75,8 +85,10 @@ class DownloadAndDraftService:
                 ) as temp_file:
                     temp_image_path = temp_file.name
 
-                # 下载图片
-                response = requests.get(image_url, timeout=10, proxies=proxy_config)
+                headers = self._get_pixiv_headers()
+                response = requests.get(
+                    image_url, timeout=10, proxies=proxy_config, headers=headers
+                )
                 response.raise_for_status()
 
                 # 保存图片
@@ -133,8 +145,19 @@ class DownloadAndDraftService:
             # 使用配置默认值
             if author is None:
                 author = draft_config.get("default_author", "公众号作者")
+
+            # 裁剪作者长度不超过16个字符
+            if author and len(author) > 16:
+                author = author[:16]
+                print(f"作者超过16个字符，已裁剪为: {author}")
+
             if show_cover is None:
                 show_cover = draft_config.get("default_show_cover", 1)
+
+            # 裁剪标题长度不超过32个字符
+            if title and len(title) > 32:
+                title = title[:32]
+                print(f"标题超过32个字符，已裁剪为: {title}")
 
             # 检查消息类型
             is_image_message = message_type == "newspic"
@@ -163,9 +186,19 @@ class DownloadAndDraftService:
                     print("获取插画详情失败或没有图片")
                     return None
 
-                # 自动生成标题
+                # 自动生成标题（默认为空）
                 if title is None:
-                    title = detail.get("title", f"插画 {illustration_id}")
+                    title = ""
+
+                # 如果标题为空，从Pixivision页面中提取标题
+                if not title and detail.get("title"):
+                    title = detail.get("title")
+                    print(f"从Pixivision页面提取标题: {title}")
+
+                # 裁剪标题长度不超过32个字符
+                if title and len(title) > 32:
+                    title = title[:32]
+                    print(f"标题超过32个字符，已裁剪为: {title}")
 
                 # 下载图片
                 images = detail["images"]
@@ -179,19 +212,19 @@ class DownloadAndDraftService:
                 max_retries = self.download_config.get("max_retries", 3)
                 logger.info(f"线程数: {max_workers}, 最大重试次数: {max_retries}")
 
-                with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    # 提交所有下载任务
-                    future_to_index = {
-                        executor.submit(
-                            self._download_single_image,
-                            image_url,
-                            i,
-                            len(images),
-                            max_retries,
-                        ): i
-                        for i, image_url in enumerate(images)
-                    }
+                executor = ThreadPoolExecutor(max_workers=max_workers)
+                future_to_index = {
+                    executor.submit(
+                        self._download_single_image,
+                        image_url,
+                        i,
+                        len(images),
+                        max_retries,
+                    ): i
+                    for i, image_url in enumerate(images)
+                }
 
+                try:
                     # 处理下载结果
                     for future in as_completed(future_to_index):
                         index = future_to_index[future]
@@ -206,6 +239,12 @@ class DownloadAndDraftService:
                                 )
                         except Exception as e:
                             logger.error(f"图片 {index+1}/{len(images)} 处理异常: {e}")
+                except KeyboardInterrupt:
+                    logger.info("收到中断信号，正在停止下载...")
+                    executor.shutdown(wait=False)  # 立即关闭线程池，不等待所有任务完成
+                    raise  # 重新抛出异常，让调用方知道下载被中断
+                finally:
+                    executor.shutdown(wait=False)
 
                 logger.info(f"图片下载完成: 成功 {len(image_files)}/{len(images)} 张")
             else:
@@ -230,9 +269,19 @@ class DownloadAndDraftService:
 
                 print(f"找到 {len(image_files)} 张图片")
 
-                # 自动生成标题
+                # 自动生成标题（默认为空）
                 if title is None:
+                    title = ""
+
+                # 如果标题为空，使用文件夹名称作为标题
+                if not title:
                     title = os.path.basename(folder_path)
+                    print(f"使用文件夹名称作为标题: {title}")
+
+                # 裁剪标题长度不超过32个字符
+                if title and len(title) > 32:
+                    title = title[:32]
+                    print(f"标题超过32个字符，已裁剪为: {title}")
 
             # 上传图片到永久素材库
             print(f"\n开始上传 {len(image_files)} 张图片到永久素材库...")
@@ -294,6 +343,19 @@ class DownloadAndDraftService:
 
             if digest is None:
                 digest = f"共 {len(media_ids)} 张图片"
+
+            # 确保标题不为空（如果为空，使用默认值）
+            if not title:
+                title = "插画集"
+                print(f"标题为空，使用默认标题: {title}")
+
+            # 最终检查标题长度，确保不超过32个字符
+            if title and len(title) > 32:
+                title = title[:32]
+                print(f"标题超过32个字符，已裁剪为: {title}")
+
+            # 上传标题
+            print(f"上传标题: {title}")
 
             # 创建草稿
             print(f"\n创建草稿...")
