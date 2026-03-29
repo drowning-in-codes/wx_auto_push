@@ -690,7 +690,6 @@ python main.py draft submit <media_id>
 
 uv run python main.py draft <subcommand> \[args]
 
-```
 
 **参数说明：**
 - `switch`：设置或查询草稿箱开关状态
@@ -894,5 +893,3 @@ uv run python main.py draft <subcommand> \[args]
 ## 许可证
 
 本项目采用 MIT 许可证，详情请参阅 LICENSE 文件。
-```
-
