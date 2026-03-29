@@ -5,6 +5,7 @@ import requests
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.utils.image_compressor import ImageCompressor
+from src.push.upload_history_service import UploadHistoryService
 
 # 配置日志
 logging.basicConfig(
@@ -29,6 +30,7 @@ class DownloadAndDraftService:
         self.proxy_config = config.get_proxy_config()
         self.request_config = config.get_request_config()
         self.download_config = config.get_download_config()
+        self.upload_history = UploadHistoryService()
 
     def _download_single_image(self, image_url, index, total, max_retries=3):
         """
@@ -341,6 +343,79 @@ class DownloadAndDraftService:
 
         except Exception as e:
             print(f"创建草稿失败: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return None
+
+    def create_draft_from_random_pixivision(
+        self,
+        start_page=1,
+        end_page=3,
+        title=None,
+        author=None,
+        compress=None,
+        digest=None,
+        content=None,
+        show_cover=1,
+        message_type="newspic",
+    ):
+        """
+        从随机Pixivision插画创建草稿
+
+        参数:
+            start_page: 开始页码
+            end_page: 结束页码
+            title: 草稿标题
+            author: 作者名称
+            compress: 是否压缩图片
+            digest: 图文消息摘要
+            content: 图文消息内容
+            show_cover: 是否显示封面图片
+            message_type: 消息类型，news(图文消息)或newspic(图片消息)
+        """
+        try:
+            # 获取已上传的article id列表
+            uploaded_ids = self.upload_history.get_all_uploaded_articles()
+            logger.info(f"已上传的article id数量: {len(uploaded_ids)}")
+
+            # 随机获取一个article id
+            article_id = self.pixivision_service.get_random_article_id(
+                start_page, end_page, exclude_ids=uploaded_ids
+            )
+
+            if not article_id:
+                print("没有可用的article id")
+                return None
+
+            print(f"随机选择了article id: {article_id}")
+
+            # 检查是否已上传
+            if self.upload_history.is_uploaded(article_id):
+                print(f"Article id {article_id} 已上传过，跳过")
+                return None
+
+            # 使用article id创建草稿
+            result = self.create_draft(
+                article_id,
+                title,
+                author,
+                compress,
+                digest,
+                content,
+                show_cover,
+                message_type,
+            )
+
+            # 如果创建成功，记录到上传历史
+            if result and "media_id" in result:
+                self.upload_history.add_uploaded_article(article_id, result["media_id"])
+                print(f"已记录article id {article_id} 到上传历史")
+
+            return result
+
+        except Exception as e:
+            print(f"从随机Pixivision插画创建草稿失败: {e}")
             import traceback
 
             traceback.print_exc()

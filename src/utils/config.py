@@ -197,6 +197,19 @@ class Config:
     def get_llm_config(self):
         return self.get("llm", {})
 
+    def get_upload_config(self):
+        return self.get("schedule.upload", {
+            "start_page": 1,
+            "end_page": 3,
+            "title": "",
+            "author": "",
+            "compress": True,
+            "digest": "",
+            "content": "",
+            "show_cover": 1,
+            "message_type": "newspic"
+        })
+
     def get_schedule_config(self):
         return self.get("schedule", {})
 

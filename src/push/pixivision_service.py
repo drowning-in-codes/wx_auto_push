@@ -322,3 +322,44 @@ class PixivisionService:
         """
         illustration_url = f"https://www.pixivision.net/zh/a/{illustration_id}"
         return self.get_illustration_detail(illustration_url, save)
+
+    def get_random_article_id(self, start_page=1, end_page=3, exclude_ids=None):
+        """
+        随机获取一个article id
+        :param start_page: 开始页码
+        :param end_page: 结束页码
+        :param exclude_ids: 要排除的article id列表
+        :return: 随机选择的article id，如果没有可用的返回None
+        """
+        if exclude_ids is None:
+            exclude_ids = []
+
+        try:
+            # 获取插画列表
+            illustrations = self.get_illustration_list(start_page, end_page, save=False)
+
+            if not illustrations:
+                logger.warning("没有获取到插画列表")
+                return None
+
+            # 过滤掉已排除的article id
+            available_illustrations = [
+                ill for ill in illustrations
+                if ill.get("article_id") not in exclude_ids
+            ]
+
+            if not available_illustrations:
+                logger.warning("没有可用的插画（所有插画都已排除）")
+                return None
+
+            # 随机选择一个
+            import random
+            selected = random.choice(available_illustrations)
+            article_id = selected.get("article_id")
+
+            logger.info(f"随机选择了article id: {article_id}")
+            return article_id
+
+        except Exception as e:
+            logger.error(f"随机获取article id失败: {e}")
+            return None

@@ -74,6 +74,17 @@
     "time_range": {
       "start": "08:00",
       "end": "20:00"
+    },
+    "upload": {
+      "start_page": 1,
+      "end_page": 3,
+      "title": "",
+      "author": "",
+      "compress": true,
+      "digest": "",
+      "content": "",
+      "show_cover": 1,
+      "message_type": "newspic"
     }
   },
   "push": {
