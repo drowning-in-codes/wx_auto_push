@@ -642,7 +642,7 @@ class WeChatAutoPush:
         digest=None,
         content=None,
         show_cover=1,
-        message_type="news",
+        message_type="或newspic",
     ):
         """
         上传图片并创建草稿
@@ -1168,7 +1168,7 @@ def main():
     draft_create_parser.add_argument(
         "--message_type",
         choices=["news", "newspic"],
-        default="news",
+        default="newspic",
         help="消息类型，news(图文消息)或newspic(图片消息)",
     )
 
