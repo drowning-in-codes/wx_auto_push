@@ -13,6 +13,7 @@
 - **微信推送**：支持图文消息和图片消息的推送
 - **智能调度**：根据配置文件定义每周发布频次，自动执行推送任务
 - **调度上传**：支持定时从随机Pixivision插画创建草稿，自动记录已上传的article id避免重复
+- **登录认证**：支持获取稳定版access_token，自动缓存管理，避免频繁请求API
 - **数据库记录**：每次执行任务后，在数据库中插入消息记录，包含详细信息和状态
 - **消息状态检查**：35分钟后自动检查消息发送状态并更新数据库
 - **预览消息**：发送前可选择将消息发送给公众号主人进行预览
@@ -360,6 +361,17 @@ uv run python main.py schedule [time|frequency|view|run|run-once|upload|upload-o
     "time_range": {
       "start": "08:00",
       "end": "20:00"
+    },
+    "upload": {
+      "start_page": 1,
+      "end_page": 3,
+      "title": "",
+      "author": "",
+      "compress": true,
+      "digest": "",
+      "content": "",
+      "show_cover": 1,
+      "message_type": "newspic"
     }
   }
 }
@@ -408,7 +420,24 @@ uv run python main.py config [menu|set]
 - `config menu`：根据配置文件创建自定义菜单
 - `config set`：设置微信公众号配置，包括 app\_id、app\_secret 等
 
-### 8. 永久素材管理
+### 8. 登录获取Token
+
+```bash
+# 获取稳定版access_token
+python main.py login
+
+# 使用uv
+uv run python main.py login
+```
+
+该命令会调用微信API获取稳定版access_token，并自动缓存到本地。Token有效期为2小时，过期后会自动刷新。
+
+**功能说明：**
+- 获取稳定版access_token（推荐使用，比普通token更稳定）
+- 自动缓存token，避免频繁请求微信API
+- 支持代理配置，确保网络请求成功
+
+### 9. 永久素材管理
 
 永久素材管理命令用于管理公众号的永久素材，支持获取、上传、删除等操作。
 

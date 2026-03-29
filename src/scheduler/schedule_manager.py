@@ -52,7 +52,16 @@ class ScheduleManager:
     def start(self):
         self.setup_schedule()
         print("调度器已启动，开始执行定时任务...")
-        self.scheduler.start()
+        print("按 Ctrl+C 停止服务")
+        try:
+            self.scheduler.start()
+        except (KeyboardInterrupt, SystemExit):
+            print("\n收到停止信号，正在关闭调度器...")
+            self.stop()
+        except Exception as e:
+            print(f"调度器运行异常: {e}")
+            self.stop()
+            raise
 
     def stop(self):
         self.scheduler.shutdown()
@@ -66,3 +75,39 @@ class ScheduleManager:
         except Exception as e:
             print(f"执行任务失败: {e}")
             return False
+
+    def run_once_schedule(self):
+        """
+        启动调度器，执行一次任务后取消调度，不再运行后续的调度任务
+        """
+        print("调度器已启动，将执行一次任务后自动停止...")
+        print("按 Ctrl+C 可立即停止服务")
+
+        try:
+            # 设置调度任务
+            self.setup_schedule()
+
+            # 立即执行一次任务
+            print("正在执行任务...")
+            try:
+                self.task_func()
+                print("任务执行完成")
+            except Exception as e:
+                print(f"任务执行失败: {e}")
+
+            # 取消所有调度任务
+            print("取消所有后续调度任务...")
+            self.scheduler.remove_all_jobs()
+
+            # 关闭调度器
+            print("调度器已停止，服务已关闭")
+            self.scheduler.shutdown()
+
+        except KeyboardInterrupt:
+            print("\n收到停止信号，正在关闭调度器...")
+            self.scheduler.shutdown()
+            print("调度器已停止")
+        except Exception as e:
+            print(f"调度器运行异常: {e}")
+            self.scheduler.shutdown()
+            raise

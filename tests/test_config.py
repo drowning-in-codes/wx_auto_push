@@ -32,6 +32,17 @@ class TestConfig(unittest.TestCase):
             "schedule": {
                 "weekly_frequency": 3,
                 "time_range": {"start": "08:00", "end": "20:00"},
+                "upload": {
+                    "start_page": 2,
+                    "end_page": 5,
+                    "title": "测试标题",
+                    "author": "测试作者",
+                    "compress": False,
+                    "digest": "测试摘要",
+                    "content": "测试内容",
+                    "show_cover": 0,
+                    "message_type": "news",
+                },
             },
             "image_compression": {
                 "enabled": True,
@@ -123,6 +134,37 @@ class TestConfig(unittest.TestCase):
         draft_config = config.get_draft_config()
         self.assertEqual(draft_config.get("default_author"), "test_author")
         self.assertEqual(draft_config.get("default_show_cover"), 1)
+
+    def test_get_upload_config(self):
+        """测试获取上传配置"""
+        config = self._create_config_with_mock()
+        upload_config = config.get_upload_config()
+        self.assertEqual(upload_config.get("start_page"), 2)
+        self.assertEqual(upload_config.get("end_page"), 5)
+        self.assertEqual(upload_config.get("title"), "测试标题")
+        self.assertEqual(upload_config.get("author"), "测试作者")
+        self.assertEqual(upload_config.get("compress"), False)
+        self.assertEqual(upload_config.get("digest"), "测试摘要")
+        self.assertEqual(upload_config.get("content"), "测试内容")
+        self.assertEqual(upload_config.get("show_cover"), 0)
+        self.assertEqual(upload_config.get("message_type"), "news")
+
+    def test_get_upload_config_default(self):
+        """测试获取上传配置（默认值）"""
+        config = self._create_config_with_mock()
+        # 移除upload配置
+        del config.config["schedule"]["upload"]
+        upload_config = config.get_upload_config()
+        # 验证默认值
+        self.assertEqual(upload_config.get("start_page"), 1)
+        self.assertEqual(upload_config.get("end_page"), 3)
+        self.assertEqual(upload_config.get("title"), "")
+        self.assertEqual(upload_config.get("author"), "")
+        self.assertEqual(upload_config.get("compress"), True)
+        self.assertEqual(upload_config.get("digest"), "")
+        self.assertEqual(upload_config.get("content"), "")
+        self.assertEqual(upload_config.get("show_cover"), 1)
+        self.assertEqual(upload_config.get("message_type"), "newspic")
 
     def test_get_with_default(self):
         """测试获取不存在的配置项返回默认值"""

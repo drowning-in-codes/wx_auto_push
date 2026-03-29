@@ -200,7 +200,16 @@ class PixivisionService:
                         os.environ["HTTPS_PROXY"] = ""
 
                     # 下载图片
-                    response = requests.get(image_url, timeout=30, proxies=proxies)
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+                        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                        "Accept-Encoding": "gzip, deflate, br",
+                        "Connection": "keep-alive",
+                    }
+                    response = requests.get(
+                        image_url, timeout=30, proxies=proxies, headers=headers
+                    )
                     response.raise_for_status()
 
                     # 获取文件扩展名
@@ -237,12 +246,13 @@ class PixivisionService:
         actual_max_workers = min(max_workers, len(images))
         logger.info(f"使用 {actual_max_workers} 个线程下载")
 
-        with ThreadPoolExecutor(max_workers=actual_max_workers) as executor:
-            future_to_index = {
-                executor.submit(download_single_image, image_url, i, len(images)): i
-                for i, image_url in enumerate(images)
-            }
+        executor = ThreadPoolExecutor(max_workers=actual_max_workers)
+        future_to_index = {
+            executor.submit(download_single_image, image_url, i, len(images)): i
+            for i, image_url in enumerate(images)
+        }
 
+        try:
             for future in as_completed(future_to_index):
                 index = future_to_index[future]
                 try:
@@ -253,6 +263,12 @@ class PixivisionService:
                         logger.warning(f"图片 {index+1}/{len(images)} 下载失败")
                 except Exception as e:
                     logger.error(f"图片 {index+1}/{len(images)} 处理异常: {e}")
+        except KeyboardInterrupt:
+            logger.info("收到中断信号，正在停止下载...")
+            executor.shutdown(wait=False)  # 立即关闭线程池，不等待所有任务完成
+            raise  # 重新抛出异常，让调用方知道下载被中断
+        finally:
+            executor.shutdown(wait=False)
 
         logger.info(f"下载完成: 成功 {len(downloaded_files)}/{len(images)} 张")
 
@@ -332,7 +348,9 @@ class PixivisionService:
         :return: 随机选择的article id，如果没有可用的返回None
         """
         if exclude_ids is None:
-            exclude_ids = []
+            exclude_ids = set()
+        else:
+            exclude_ids = set(exclude_ids)
 
         try:
             # 获取插画列表
@@ -342,10 +360,11 @@ class PixivisionService:
                 logger.warning("没有获取到插画列表")
                 return None
 
-            # 过滤掉已排除的article id
+            # 过滤掉已排除的article id和空/缺失的article_id
             available_illustrations = [
-                ill for ill in illustrations
-                if ill.get("article_id") not in exclude_ids
+                ill
+                for ill in illustrations
+                if ill.get("article_id") and ill.get("article_id") not in exclude_ids
             ]
 
             if not available_illustrations:
@@ -354,6 +373,7 @@ class PixivisionService:
 
             # 随机选择一个
             import random
+
             selected = random.choice(available_illustrations)
             article_id = selected.get("article_id")
 
