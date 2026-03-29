@@ -702,7 +702,7 @@ python main.py draft create 11525 \
 | `--digest`       | 图文消息摘要                            | 自动生成   |
 | `--content`      | 图文消息内容（支持HTML）                    | 自动生成   |
 | `--show-cover`   | 是否显示封面：1显示，0不显示                   | 1      |
-| `--message-type` | 消息类型：`news`(图文消息)或`newspic`(图片消息) | `news` |
+| `--message-type` | 消息类型：`news`(图文消息)或`newspic`(图片消息) | `newspic` |
 
 **配置项：**
 
