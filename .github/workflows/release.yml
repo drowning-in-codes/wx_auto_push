@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*" # 当推送以 v 开头的标签时触发
+
+jobs:
+  build-and-release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5 # 使用 uv 官方 Action
+
+      - name: Build EXE (Windows)
+        # 只有在 Windows 运行时才执行打包 exe
+        if: matrix.os == 'windows-latest'
+        run: |
+          uvx pyinstaller --onefile --clean main.py --name wx-auto-push
+
+      - name: Build Python Package (Source & Wheel)
+        if: matrix.os == 'windows-latest'
+        run: uv build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/* # 自动将 uv 生成的包上传到 Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
