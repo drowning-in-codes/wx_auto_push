@@ -46,15 +46,22 @@ class WeChatAutoPush:
         # 初始化爬虫
         anime_sources = self.config.get_anime_sources()
         proxy_config = self.config.get_proxy_config()
+        proxy_pool_config = self.config.get_proxy_pool_config()
         if anime_sources:
             self.anime_crawler = CrawlerFactory.create_crawler(
-                "anime", anime_sources, proxy_config
+                "anime",
+                anime_sources,
+                proxy_config,
+                proxy_pool_config=proxy_pool_config,
             )
 
         image_sources = self.config.get_image_sources()
         if image_sources:
             self.image_crawler = CrawlerFactory.create_crawler(
-                "image", image_sources, proxy_config
+                "image",
+                image_sources,
+                proxy_config,
+                proxy_pool_config=proxy_pool_config,
             )
 
         # 初始化LLM客户端
@@ -78,10 +85,12 @@ class WeChatAutoPush:
 
         # 初始化 Pixivision 服务
         proxy_config = self.config.get_proxy_config()
+        proxy_pool_config = self.config.get_proxy_pool_config()
         # 初始化 Pixivision 服务（使用JSON存储）
         self.pixivision_service = PixivisionService(
             proxy_config=proxy_config,
             request_config=self.config.get_request_config(),
+            proxy_pool_config=proxy_pool_config,
             storage_type="json",
             file_path="data/illustrations.json",
         )

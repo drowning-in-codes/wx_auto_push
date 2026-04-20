@@ -14,6 +14,7 @@ class PixivisionService:
         self,
         proxy_config=None,
         request_config=None,
+        proxy_pool_config=None,
         storage_type="json",
         **storage_kwargs,
     ):
@@ -21,14 +22,16 @@ class PixivisionService:
         初始化 Pixivision 服务
         :param proxy_config: 代理配置
         :param request_config: 请求配置
+        :param proxy_pool_config: 代理池配置
         :param storage_type: 存储类型，可选值: 'json', 'database'
         :param storage_kwargs: 存储服务的参数
         """
         self.base_url = "https://www.pixivision.net/zh/c/illustration"
         self.proxy_config = proxy_config
         self.request_config = request_config
+        self.proxy_pool_config = proxy_pool_config
         self.crawler = CrawlerFactory.create_crawler(
-            "pixivision", [self.base_url], proxy_config, request_config
+            "pixivision", [self.base_url], proxy_config, request_config, proxy_pool_config
         )
         # 初始化存储服务
         self.storage = StorageFactory.create_storage(storage_type, **storage_kwargs)

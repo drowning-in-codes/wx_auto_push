@@ -1,0 +1,52 @@
+{
+  "proxy_pool": {
+    "enabled": true,
+    "api_url": "https://proxy.scdn.io/api/get_proxy.php",
+    "protocol": "all",
+    "count": 5,
+    "country_code": "",
+    "fetch_interval": 60,
+    "max_proxies": 10
+  }
+}
+
+/*
+代理池配置说明：
+
+1. enabled: 是否启用代理池
+   - true: 启用代理池
+   - false: 禁用代理池（默认）
+
+2. api_url: 代理池API地址
+   - 默认: https://proxy.scdn.io/api/get_proxy.php
+
+3. protocol: 代理协议类型
+   - http: HTTP代理
+   - https: HTTPS代理
+   - 默认: http
+
+4. count: 每次获取的代理数量
+   - 默认: 5
+   - 最大: 20
+
+5. country_code: 代理国家（可选）
+   - 留空: 不限制国家
+   - 例如: "CN" 表示只获取中国的代理
+   - 例如: "US" 表示只获取美国的代理
+
+6. fetch_interval: 代理刷新间隔（秒）
+   - 默认: 60
+
+7. max_proxies: 最大代理数量
+   - 默认: 10
+
+使用说明：
+1. 将上述配置添加到 config.json 文件中
+2. 确保 enabled 设为 true
+3. 保存配置后，系统会自动从代理池获取代理用于爬取
+
+注意：
+- 代理池服务可能需要网络访问权限
+- 如果代理池获取失败，系统会自动回退到传统代理配置
+- 如果传统代理也未配置，系统会直接连接目标网站
+*/

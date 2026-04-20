@@ -198,17 +198,20 @@ class Config:
         return self.get("llm", {})
 
     def get_upload_config(self):
-        return self.get("schedule.upload", {
-            "start_page": 1,
-            "end_page": 3,
-            "title": "",
-            "author": "",
-            "compress": True,
-            "digest": "",
-            "content": "",
-            "show_cover": 1,
-            "message_type": "newspic"
-        })
+        return self.get(
+            "schedule.upload",
+            {
+                "start_page": 1,
+                "end_page": 3,
+                "title": "",
+                "author": "",
+                "compress": True,
+                "digest": "",
+                "content": "",
+                "show_cover": 1,
+                "message_type": "newspic",
+            },
+        )
 
     def get_schedule_config(self):
         return self.get("schedule", {})
@@ -226,6 +229,24 @@ class Config:
 
     def get_proxy_config(self):
         return self.get("proxy", {})
+
+    def get_proxy_pool_config(self):
+        """
+        获取代理池配置
+        :return: 代理池配置字典
+        """
+        return self.get(
+            "proxy_pool",
+            {
+                "enabled": False,
+                "api_url": "https://proxy.scdn.io/api/get_proxy.php",
+                "protocol": "all",
+                "count": 5,
+                "country_code": "",
+                "fetch_interval": 60,
+                "max_proxies": 10,
+            },
+        )
 
     def get_request_config(self):
         """

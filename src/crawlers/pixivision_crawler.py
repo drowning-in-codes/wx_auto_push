@@ -5,8 +5,8 @@ import time
 
 
 class PixivisionCrawler(BaseCrawler):
-    def __init__(self, urls, proxy_config=None, request_config=None):
-        super().__init__(urls, proxy_config)
+    def __init__(self, urls, proxy_config=None, request_config=None, proxy_pool_config=None):
+        super().__init__(urls, proxy_config, proxy_pool_config)
         self.request_config = request_config or {}
 
     def _get_headers(self):

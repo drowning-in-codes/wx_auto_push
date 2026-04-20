@@ -101,6 +101,15 @@
     "http_proxy": "http://localhost:7890",
     "https_proxy": "http://localhost:7890"
   },
+  "proxy_pool": {
+    "enabled": false,
+    "api_url": "https://proxy.scdn.io/api/get_proxy.php",
+    "protocol": "all",
+    "count": 5,
+    "country_code": "",
+    "fetch_interval": 60,
+    "max_proxies": 10
+  },
   "image_compression": {
     "enabled": true,
     "max_size": 1048576,

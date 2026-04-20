@@ -4,13 +4,20 @@ from bs4 import BeautifulSoup
 import time
 import os
 
+from src.utils.proxy_pool_service import ProxyPoolService
+
 
 
 class BaseCrawler:
-    def __init__(self, urls, proxy_config=None):
+    def __init__(self, urls, proxy_config=None, proxy_pool_config=None):
         self.urls = urls
         self.proxy_config = proxy_config or {}
-       
+        self.proxy_pool_config = proxy_pool_config or {}
+        self.proxy_pool = None
+        
+        # 初始化代理池服务
+        if self.proxy_pool_config.get("enabled"):
+            self.proxy_pool = ProxyPoolService(self.proxy_pool_config)
 
     def get_random_url(self):
         return random.choice(self.urls)
@@ -19,6 +26,13 @@ class BaseCrawler:
         """
         获取代理配置
         """
+        # 优先使用代理池
+        if self.proxy_pool:
+            proxy = self.proxy_pool.get_proxy()
+            if proxy:
+                return proxy
+        
+        # 如果代理池未启用或未获取到代理，使用传统代理配置
         if self.proxy_config.get("enabled"):
             return {
                 "http": self.proxy_config.get("http_proxy"),

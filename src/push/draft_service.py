@@ -6,6 +6,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.utils.image_compressor import ImageCompressor
 from src.push.upload_history_service import UploadHistoryService
+from src.utils.proxy_pool_service import ProxyPoolService
 
 # 配置日志
 logging.basicConfig(
@@ -28,9 +29,15 @@ class DownloadAndDraftService:
         self.pixivision_service = pixivision_service
         self.config = config
         self.proxy_config = config.get_proxy_config()
+        self.proxy_pool_config = config.get_proxy_pool_config()
         self.request_config = config.get_request_config()
         self.download_config = config.get_download_config()
         self.upload_history = UploadHistoryService()
+
+        # 初始化代理池服务
+        self.proxy_pool = None
+        if self.proxy_pool_config.get("enabled"):
+            self.proxy_pool = ProxyPoolService(self.proxy_pool_config)
 
     def _get_pixiv_headers(self):
         return {
@@ -66,7 +73,11 @@ class DownloadAndDraftService:
 
                 # 配置代理
                 proxy_config = None
-                if self.proxy_config and self.proxy_config.get("enabled", False):
+                # 优先使用代理池
+                if self.proxy_pool:
+                    proxy_config = self.proxy_pool.get_proxy()
+                # 如果代理池未启用或未获取到代理，使用传统代理配置
+                elif self.proxy_config and self.proxy_config.get("enabled", False):
                     http_proxy = self.proxy_config.get("http_proxy", "")
                     https_proxy = self.proxy_config.get("https_proxy", "")
                     if http_proxy or https_proxy:
