@@ -339,7 +339,7 @@ class WeChatAutoPush:
             print(f"共找到 {len(illustrations)} 张存储的插画:")
             for i, illustration in enumerate(illustrations, 1):
                 print(
-                    f"{i}. 标题:{illustration.get('title')} (ID: {illustration.get('article_id')})"
+                    f"{i}. {illustration.get('title')} (ID: {illustration.get('article_id')})"
                 )
                 print(f"   URL: {illustration.get('url')}")
                 print(f"   标签: {', '.join(illustration.get('tags', []))}")
@@ -642,7 +642,7 @@ class WeChatAutoPush:
         digest=None,
         content=None,
         show_cover=1,
-        message_type="newspic",
+        message_type="news",
     ):
         """
         上传图片并创建草稿
@@ -679,167 +679,26 @@ class WeChatAutoPush:
             # 启动调度器
             self.schedule_manager.start()
         except KeyboardInterrupt:
-            print("\n服务已停止")
+            print("服务已停止")
             self.schedule_manager.stop()
-        except Exception as e:
-            print(f"服务异常: {e}")
-            self.schedule_manager.stop()
+
+    def run_schedule(self):
+        """
+        启动调度推送
+        """
+        self.run()
 
     def run_once(self):
         """
         执行一次推送后关闭
         """
         try:
-            # 使用调度器执行一次任务后取消调度
-            self.schedule_manager.run_once_schedule()
+            print("执行一次推送...")
+            # 直接执行推送任务
+            self._run_push_task()
+            print("推送执行完成，服务已关闭")
         except Exception as e:
             print(f"执行推送失败: {e}")
-
-    def run_schedule_upload(
-        self,
-        start_page=None,
-        end_page=None,
-        title=None,
-        author=None,
-        compress=None,
-        digest=None,
-        content=None,
-        show_cover=None,
-        message_type=None,
-    ):
-        """
-        启动调度上传（从随机Pixivision插画创建草稿）
-        """
-        # 从配置文件获取默认值
-        upload_config = self.config.get_upload_config()
-        if start_page is None:
-            start_page = upload_config.get("start_page", 1)
-        if end_page is None:
-            end_page = upload_config.get("end_page", 3)
-        if title is None:
-            title = upload_config.get("title", "")
-        if author is None:
-            author = upload_config.get("author", "")
-        if compress is None:
-            compress = upload_config.get("compress", True)
-        if digest is None:
-            digest = upload_config.get("digest", "")
-        if content is None:
-            content = upload_config.get("content", "")
-        if show_cover is None:
-            show_cover = upload_config.get("show_cover", 1)
-        if message_type is None:
-            message_type = upload_config.get("message_type", "newspic")
-
-        print("微信公众号自动上传服务启动")
-        print("按 Ctrl+C 停止服务")
-
-        schedule_manager = None
-        try:
-            # 创建上传任务函数
-            def upload_task():
-                try:
-                    print("\n执行上传任务...")
-                    result = self.draft_service.create_draft_from_random_pixivision(
-                        start_page,
-                        end_page,
-                        title,
-                        author,
-                        compress,
-                        digest,
-                        content,
-                        show_cover,
-                        message_type,
-                    )
-                    if result:
-                        print("上传任务执行成功")
-                    else:
-                        print("上传任务执行失败")
-                except Exception as e:
-                    print(f"执行上传任务时出错: {e}")
-
-            # 创建调度器
-            from src.scheduler.schedule_manager import ScheduleManager
-
-            schedule_manager = ScheduleManager(self.config, upload_task)
-
-            # 启动调度器
-            schedule_manager.start()
-        except KeyboardInterrupt:
-            print("\n服务已停止")
-            if schedule_manager:
-                schedule_manager.stop()
-        except Exception as e:
-            print(f"服务异常: {e}")
-            if schedule_manager:
-                schedule_manager.stop()
-
-    def run_upload_once(
-        self,
-        start_page=None,
-        end_page=None,
-        title=None,
-        author=None,
-        compress=None,
-        digest=None,
-        content=None,
-        show_cover=None,
-        message_type=None,
-    ):
-        """
-        执行一次上传后关闭
-        """
-        # 从配置文件获取默认值
-        upload_config = self.config.get_upload_config()
-        if start_page is None:
-            start_page = upload_config.get("start_page", 1)
-        if end_page is None:
-            end_page = upload_config.get("end_page", 3)
-        if title is None:
-            title = upload_config.get("title", "")
-        if author is None:
-            author = upload_config.get("author", "")
-        if compress is None:
-            compress = upload_config.get("compress", True)
-        if digest is None:
-            digest = upload_config.get("digest", "")
-        if content is None:
-            content = upload_config.get("content", "")
-        if show_cover is None:
-            show_cover = upload_config.get("show_cover", 1)
-        if message_type is None:
-            message_type = upload_config.get("message_type", "newspic")
-
-        # 创建上传任务函数
-        def upload_task():
-            try:
-                print("\n执行上传任务...")
-                result = self.draft_service.create_draft_from_random_pixivision(
-                    start_page,
-                    end_page,
-                    title,
-                    author,
-                    compress,
-                    digest,
-                    content,
-                    show_cover,
-                    message_type,
-                )
-                if result:
-                    print("上传任务执行成功")
-                else:
-                    print("上传任务执行失败")
-            except Exception as e:
-                print(f"执行上传任务时出错: {e}")
-
-        # 创建调度器并执行一次任务后取消调度
-        try:
-            from src.scheduler.schedule_manager import ScheduleManager
-
-            schedule_manager = ScheduleManager(self.config, upload_task)
-            schedule_manager.run_once_schedule()
-        except Exception as e:
-            print(f"执行上传失败: {e}")
 
     def handle_message(self, message):
         """
@@ -847,35 +706,6 @@ class WeChatAutoPush:
         """
         print(f"接收到消息: {message}")
         # 这里可以添加消息处理逻辑
-
-    def login(self):
-        """
-        获取稳定版access_token
-        """
-        try:
-            print("正在获取稳定版access_token...")
-            wechat_config = self.config.get_wechat_config()
-            proxy_config = self.config.get_proxy_config()
-
-            from src.push.wechat_client import WeChatClient
-
-            wechat_client = WeChatClient(
-                wechat_config.get("app_id"),
-                wechat_config.get("app_secret"),
-                proxy_config,
-            )
-
-            access_token = wechat_client.get_stable_access_token()
-
-            print(f"✓ 成功获取稳定版access_token")
-            print(f"Access Token: {access_token}")
-            print(f"Token已缓存，有效期约2小时")
-
-        except Exception as e:
-            print(f"✗ 获取access_token失败: {e}")
-            import traceback
-
-            traceback.print_exc()
 
 
 def main():
@@ -897,9 +727,6 @@ def main():
     config_parser.add_argument("--app_secret", help="微信公众号 App Secret")
     config_parser.add_argument("--template_id", help="模板消息 ID")
     config_parser.add_argument("--preview_openid", help="预览 OpenID")
-
-    # 登录命令
-    login_parser = subparsers.add_parser("login", help="获取稳定版access_token")
 
     # 调度管理命令
     schedule_parser = subparsers.add_parser("schedule", help="调度管理")
@@ -937,66 +764,6 @@ def main():
     # 执行一次推送后关闭
     schedule_run_once_parser = schedule_subparsers.add_parser(
         "run-once", help="执行一次推送后关闭"
-    )
-
-    # 启动调度上传
-    schedule_upload_parser = schedule_subparsers.add_parser(
-        "upload", help="启动调度上传（从随机Pixivision插画创建草稿）"
-    )
-    schedule_upload_parser.add_argument(
-        "--start_page", type=int, default=None, help="开始页码"
-    )
-    schedule_upload_parser.add_argument(
-        "--end_page", type=int, default=None, help="结束页码"
-    )
-    schedule_upload_parser.add_argument("--title", help="草稿标题")
-    schedule_upload_parser.add_argument("--author", help="作者名称")
-    schedule_upload_parser.add_argument(
-        "--compress", action="store_true", help="启用图片压缩"
-    )
-    schedule_upload_parser.add_argument(
-        "--no-compress", action="store_false", dest="compress", help="禁用图片压缩"
-    )
-    schedule_upload_parser.add_argument("--digest", help="图文消息摘要")
-    schedule_upload_parser.add_argument("--content", help="图文消息内容")
-    schedule_upload_parser.add_argument(
-        "--show_cover", type=int, default=None, help="是否显示封面图片"
-    )
-    schedule_upload_parser.add_argument(
-        "--message_type",
-        choices=["news", "newspic"],
-        default=None,
-        help="消息类型，news(图文消息)或newspic(图片消息)",
-    )
-
-    # 执行一次上传后关闭
-    schedule_upload_once_parser = schedule_subparsers.add_parser(
-        "upload-once", help="执行一次上传后关闭"
-    )
-    schedule_upload_once_parser.add_argument(
-        "--start_page", type=int, default=None, help="开始页码"
-    )
-    schedule_upload_once_parser.add_argument(
-        "--end_page", type=int, default=None, help="结束页码"
-    )
-    schedule_upload_once_parser.add_argument("--title", help="草稿标题")
-    schedule_upload_once_parser.add_argument("--author", help="作者名称")
-    schedule_upload_once_parser.add_argument(
-        "--compress", action="store_true", help="启用图片压缩"
-    )
-    schedule_upload_once_parser.add_argument(
-        "--no-compress", action="store_false", dest="compress", help="禁用图片压缩"
-    )
-    schedule_upload_once_parser.add_argument("--digest", help="图文消息摘要")
-    schedule_upload_once_parser.add_argument("--content", help="图文消息内容")
-    schedule_upload_once_parser.add_argument(
-        "--show_cover", type=int, default=None, help="是否显示封面图片"
-    )
-    schedule_upload_once_parser.add_argument(
-        "--message_type",
-        choices=["news", "newspic"],
-        default=None,
-        help="消息类型，news(图文消息)或newspic(图片消息)",
     )
 
     # Pixivision 管理命令
@@ -1168,7 +935,7 @@ def main():
     draft_create_parser.add_argument(
         "--message_type",
         choices=["news", "newspic"],
-        default="newspic",
+        default="news",
         help="消息类型，news(图文消息)或newspic(图片消息)",
     )
 
@@ -1199,8 +966,6 @@ def main():
             if args.preview_openid:
                 config_data["preview_openid"] = args.preview_openid
             app.save_wechat_config(config_data)
-    elif args.command == "login":
-        app.login()
 
     elif args.command == "pixivision":
         if args.pixivision_command == "list":
@@ -1239,30 +1004,6 @@ def main():
             app.run_schedule()
         elif args.schedule_command == "run-once":
             app.run_once()
-        elif args.schedule_command == "upload":
-            app.run_schedule_upload(
-                args.start_page,
-                args.end_page,
-                args.title,
-                args.author,
-                args.compress,
-                args.digest,
-                args.content,
-                args.show_cover,
-                args.message_type,
-            )
-        elif args.schedule_command == "upload-once":
-            app.run_upload_once(
-                args.start_page,
-                args.end_page,
-                args.title,
-                args.author,
-                args.compress,
-                args.digest,
-                args.content,
-                args.show_cover,
-                args.message_type,
-            )
         else:
             # 没有提供子命令，打印帮助信息
             schedule_parser.print_help()
