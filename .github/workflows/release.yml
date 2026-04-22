@@ -45,11 +45,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/* # 自动将 uv 生成的包上传到 Release
-        # 核心配置：自动根据 PR 生成更新日志并填入 Release 内容框
-        generate_release_notes: true
-        # 从项目根目录下的 CHANGELOG.md 读取正文
-        body_path: CHANGELOG.md
-        # 如果文件不存在，是否报错（建议设为 false，防止流程中断）
-        fail_on_unmatched_files: false
+          # 核心配置：自动根据 PR 生成更新日志并填入 Release 内容框
+          generate_release_notes: true
+          # 从项目根目录下的 CHANGELOG.md 读取正文
+          body_path: CHANGELOG.md
+          # 如果文件不存在，是否报错（建议设为 false，防止流程中断）
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
