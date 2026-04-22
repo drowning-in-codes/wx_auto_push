@@ -5,7 +5,9 @@ import time
 
 
 class PixivisionCrawler(BaseCrawler):
-    def __init__(self, urls, proxy_config=None, request_config=None, proxy_pool_config=None):
+    def __init__(
+        self, urls, proxy_config=None, request_config=None, proxy_pool_config=None
+    ):
         super().__init__(urls, proxy_config, proxy_pool_config)
         self.request_config = request_config or {}
 
@@ -25,7 +27,10 @@ class PixivisionCrawler(BaseCrawler):
         """
         url = self.urls[0]
         try:
-            response = requests.get(
+            # 创建会话，禁用系统代理，避免代理冲突
+            session = requests.Session()
+            session.trust_env = False  # 禁用系统代理设置
+            response = session.get(
                 url, headers=self._get_headers(), proxies=self._get_proxies()
             )
             response.raise_for_status()
@@ -47,7 +52,10 @@ class PixivisionCrawler(BaseCrawler):
                     if delay > 0:
                         time.sleep(delay)
 
-                response = requests.get(
+                # 创建会话，禁用系统代理，避免代理冲突
+                session = requests.Session()
+                session.trust_env = False  # 禁用系统代理设置
+                response = session.get(
                     url, headers=self._get_headers(), proxies=self._get_proxies()
                 )
                 response.raise_for_status()
@@ -288,7 +296,10 @@ class PixivisionCrawler(BaseCrawler):
             else:
                 page_url = f"{base_url}?p={page}"
             try:
-                response = requests.get(
+                # 创建会话，禁用系统代理，避免代理冲突
+                session = requests.Session()
+                session.trust_env = False  # 禁用系统代理设置
+                response = session.get(
                     page_url, headers=self._get_headers(), proxies=self._get_proxies()
                 )
                 response.raise_for_status()

@@ -6,7 +6,12 @@
     "count": 5,
     "country_code": "",
     "fetch_interval": 60,
-    "max_proxies": 10
+    "max_proxies": 10,
+    "proxy_config": {
+      "enabled": false,
+      "http_proxy": "http://localhost:7890",
+      "https_proxy": "http://localhost:7890"
+    }
   }
 }
 
@@ -23,7 +28,9 @@
 3. protocol: 代理协议类型
    - http: HTTP代理
    - https: HTTPS代理
-   - 默认: http
+   - socks4: SOCKS4代理
+   - socks5: SOCKS5代理
+   - all: 任意可用协议（默认）
 
 4. count: 每次获取的代理数量
    - 默认: 5
@@ -40,13 +47,22 @@
 7. max_proxies: 最大代理数量
    - 默认: 10
 
+8. proxy_config: 连接代理池API时使用的代理配置
+   - enabled: 是否启用代理连接代理池API
+   - http_proxy: HTTP代理地址
+   - https_proxy: HTTPS代理地址
+   - 如果 enabled 为 false，则直接连接代理池API
+   - 如果 enabled 为 true，则通过指定的代理连接代理池API
+
 使用说明：
 1. 将上述配置添加到 config.json 文件中
 2. 确保 enabled 设为 true
-3. 保存配置后，系统会自动从代理池获取代理用于爬取
+3. 如果需要通过代理连接代理池API，设置 proxy_config.enabled 为 true
+4. 保存配置后，系统会自动从代理池获取代理用于爬取
 
 注意：
 - 代理池服务可能需要网络访问权限
 - 如果代理池获取失败，系统会自动回退到传统代理配置
 - 如果传统代理也未配置，系统会直接连接目标网站
+- proxy_config 用于控制连接代理池API时是否使用代理，与爬取目标网站时使用的代理是独立的
 */

@@ -108,7 +108,12 @@
     "count": 5,
     "country_code": "",
     "fetch_interval": 60,
-    "max_proxies": 10
+    "max_proxies": 10,
+    "proxy_config": {
+      "enabled": false,
+      "http_proxy": "http://localhost:7890",
+      "https_proxy": "http://localhost:7890"
+    }
   },
   "image_compression": {
     "enabled": true,
