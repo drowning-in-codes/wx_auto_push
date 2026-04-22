@@ -18,7 +18,7 @@ jobs:
       packages: write  # (可选) 如果你需要推送到 GitHub Packages
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
