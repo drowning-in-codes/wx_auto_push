@@ -17,7 +17,7 @@ jobs:
         uses: astral-sh/setup-uv@v7 # 假设当前最新稳定版
         with:
           enable-cache: true
-          python-ersion: "3.13"
+          python-version: "3.13"
 
       - name: Install the project
         run: uv sync --all-extras --dev
