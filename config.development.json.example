@@ -125,5 +125,11 @@
     "default_author": "proanimer",
     "default_material_type": "temporary",
     "default_show_cover": 1
+  },
+  "download": {
+    "max_retries": 3,
+    "max_workers": 5,
+    "directory": "./downloads",
+    "enable_crawl_proxy_pool": true
   }
 }

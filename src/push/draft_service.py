@@ -36,7 +36,8 @@ class DownloadAndDraftService:
 
         # 初始化代理池服务
         self.proxy_pool = None
-        if self.proxy_pool_config.get("enabled"):
+        enable_crawl_proxy_pool = self.download_config.get("enable_crawl_proxy_pool", False)
+        if enable_crawl_proxy_pool and self.proxy_pool_config.get("enabled"):
             self.proxy_pool = ProxyPoolService(self.proxy_pool_config)
 
     def _get_pixiv_headers(self):

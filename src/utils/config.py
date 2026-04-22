@@ -271,6 +271,7 @@ class Config:
                 "max_workers": 5,
                 "max_retries": 3,
                 "directory": "./downloads",
+                "enable_crawl_proxy_pool": True,
             },
         )
 
