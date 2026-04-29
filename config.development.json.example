@@ -1,7 +1,7 @@
 {
   "wechat": {
-    "app_id": "wxd4da0af253d340f4",
-    "app_secret": "d4fd8fc97bd56529030fa0f2d0a2514e",
+    "app_id": "your_app_id",
+    "app_secret": "your_app_secret",
     "template_id": "your_template_id",
     "token": "wechat_auto_push",
     "preview": {
@@ -102,7 +102,7 @@
     "https_proxy": "http://localhost:7890"
   },
   "proxy_pool": {
-    "enabled": true,
+    "enabled": false,
     "api_url": "https://proxy.scdn.io/api/get_proxy.php",
     "protocol": "all",
     "count": 5,
