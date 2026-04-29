@@ -1,7 +1,10 @@
-import requests
+import json
 import logging
-import time
+import os
 import random
+import time
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,75 @@ class ProxyPoolService:
         self.last_fetch_time = 0
         self.fetch_interval = self.config.get("fetch_interval", 60)  # 默认60秒
         self.max_proxies = self.config.get("max_proxies", 10)  # 默认最多10个代理
+        self.cache_file_path = self.config.get(
+            "cache_file_path", "data/proxy_pool_cache.json"
+        )
+
+        self._ensure_cache_directory()
+        self._load_cached_proxies()
+
+    def _ensure_cache_directory(self):
+        """确保缓存文件目录存在"""
+        cache_directory = os.path.dirname(os.path.abspath(self.cache_file_path))
+        if cache_directory and not os.path.exists(cache_directory):
+            os.makedirs(cache_directory, exist_ok=True)
+
+    def _load_cached_proxies(self):
+        """从本地缓存文件加载代理"""
+        try:
+            if not os.path.exists(self.cache_file_path):
+                return False
+
+            with open(self.cache_file_path, "r", encoding="utf-8") as cache_file:
+                cache_data = json.load(cache_file)
+
+            if isinstance(cache_data, dict):
+                proxies = cache_data.get("proxies", [])
+                last_fetch_time = cache_data.get("last_fetch_time", 0)
+            elif isinstance(cache_data, list):
+                proxies = cache_data
+                last_fetch_time = os.path.getmtime(self.cache_file_path)
+            else:
+                return False
+
+            if proxies:
+                self.proxies = proxies[: self.max_proxies]
+                self.last_fetch_time = float(last_fetch_time) if last_fetch_time else 0
+                logger.info(f"从本地缓存加载 {len(self.proxies)} 个代理")
+                return True
+
+            return False
+        except Exception as e:
+            logger.warning(f"加载代理缓存失败: {e}")
+            return False
+
+    def _save_cached_proxies(self):
+        """保存代理到本地缓存文件"""
+        try:
+            cache_data = {
+                "last_fetch_time": self.last_fetch_time,
+                "proxies": self.proxies[: self.max_proxies],
+            }
+            with open(self.cache_file_path, "w", encoding="utf-8") as cache_file:
+                json.dump(cache_data, cache_file, ensure_ascii=False, indent=2)
+            return True
+        except Exception as e:
+            logger.warning(f"保存代理缓存失败: {e}")
+            return False
+
+    def _get_available_proxy_from_pool(self):
+        """从当前代理池中获取一个可用代理"""
+        for _ in range(len(self.proxies)):
+            proxy = random.choice(self.proxies)
+            proxy_url = f"http://{proxy}"
+
+            if self._is_proxy_available(proxy_url):
+                return {"http": proxy_url, "https": proxy_url}
+
+            logger.warning(f"代理 {proxy} 不可用，尝试下一个")
+            self.proxies.remove(proxy)
+
+        return None
 
     def fetch_proxies(self):
         """
@@ -74,39 +146,53 @@ class ProxyPoolService:
             if proxies:
                 self.proxies = proxies[: self.max_proxies]
                 self.last_fetch_time = time.time()
+                self._save_cached_proxies()
                 logger.info(f"成功获取 {len(self.proxies)} 个代理")
+                return self.proxies
             else:
                 logger.warning("未获取到代理")
+                return []
 
         except Exception as e:
             logger.error(f"获取代理失败: {e}")
+            return self.proxies
 
     def get_proxy(self):
         """
         获取一个可用的代理
         :return: 代理字典 {"http": "...", "https": "..."}
         """
-        # 检查是否需要刷新代理
-        if not self.proxies or time.time() - self.last_fetch_time > self.fetch_interval:
+        # 优先使用本地缓存或当前内存中的代理
+        if not self.proxies:
+            self._load_cached_proxies()
+
+        if self.proxies:
+            proxy = self._get_available_proxy_from_pool()
+            if proxy:
+                return proxy
+
+        # 当前代理池不可用时，再从API刷新
+        if not self.proxies:
             self.fetch_proxies()
 
         if not self.proxies:
             return None
 
-        # 随机选择一个代理并检查可用性
-        for _ in range(len(self.proxies)):
-            proxy = random.choice(self.proxies)
-            proxy_url = f"http://{proxy}"
+        proxy = self._get_available_proxy_from_pool()
+        if proxy:
+            return proxy
 
-            # 检查代理是否可用
-            if self._is_proxy_available(proxy_url):
-                return {"http": proxy_url, "https": proxy_url}
-            else:
-                logger.warning(f"代理 {proxy} 不可用，尝试下一个")
-                # 从列表中移除不可用的代理
-                self.proxies.remove(proxy)
+        # 所有代理都不可用时，回源刷新一次
+        self.fetch_proxies()
 
-        # 所有代理都不可用
+        if not self.proxies:
+            logger.warning("所有代理都不可用")
+            return None
+
+        proxy = self._get_available_proxy_from_pool()
+        if proxy:
+            return proxy
+
         logger.warning("所有代理都不可用")
         return None
 
@@ -134,7 +220,10 @@ class ProxyPoolService:
         获取所有代理
         :return: 代理列表
         """
-        if not self.proxies or time.time() - self.last_fetch_time > self.fetch_interval:
+        if not self.proxies:
+            self._load_cached_proxies()
+
+        if not self.proxies:
             self.fetch_proxies()
 
         return self.proxies
