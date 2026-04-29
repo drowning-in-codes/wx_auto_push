@@ -88,8 +88,8 @@ class DownloadAndDraftService:
                         }
                 else:
                     # 显式禁用代理，覆盖系统环境中的代理配置
-                    os.environ["HTTP_PROXY"] = ""
-                    os.environ["HTTPS_PROXY"] = ""
+                    os.environ.pop('HTTP_PROXY', None)
+                    os.environ.pop('HTTPS_PROXY', None)
 
                 # 创建临时文件
                 with tempfile.NamedTemporaryFile(

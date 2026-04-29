@@ -39,9 +39,9 @@ class BaseCrawler:
                 "https": self.proxy_config.get("https_proxy"),
             }
         # 如果代理未启用，清空环境变量
-        os.environ["HTTP_PROXY"] = ""
-        os.environ["HTTPS_PROXY"] = ""
-        return None
+        os.environ.pop('HTTP_PROXY', None)
+        os.environ.pop('HTTPS_PROXY', None)
+        return {"http": None, "https": None}
 
     def crawl(self):
         url = self.get_random_url()

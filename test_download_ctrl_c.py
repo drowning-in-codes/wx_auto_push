@@ -63,5 +63,11 @@ def test_download_ctrl_c():
     
     return True
 
+def test_main_site():
+    import requests
+    res = requests.get("https://www.pixivision.net/zh/a/11433")
+    res.raise_for_status()
+    print(res.text)
+
 if __name__ == "__main__":
     test_download_ctrl_c()

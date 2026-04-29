@@ -199,8 +199,8 @@ class PixivisionService:
                             }
                     else:
                         # 显式禁用代理，覆盖系统环境中的代理配置
-                        os.environ["HTTP_PROXY"] = ""
-                        os.environ["HTTPS_PROXY"] = ""
+                        os.environ.pop('HTTP_PROXY', None)
+                        os.environ.pop('HTTPS_PROXY', None)
 
                     # 下载图片
                     headers = {
