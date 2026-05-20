@@ -10,9 +10,13 @@ class WeChatPushService:
     def __init__(self, config):
         wechat_config = config.get_wechat_config()
         proxy_config = config.get_proxy_config()
+        http_client_config = config.get_http_client_config()
         push_config = config.get_push_config()
         self.client = WeChatClient(
-            wechat_config.get("app_id"), wechat_config.get("app_secret"), proxy_config
+            wechat_config.get("app_id"),
+            wechat_config.get("app_secret"),
+            proxy_config,
+            http_client_config,
         )
         self.template_id = wechat_config.get("template_id")
         self.preview_config = wechat_config.get("preview", {})

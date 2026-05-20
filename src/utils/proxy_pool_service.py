@@ -4,13 +4,13 @@ import os
 import random
 import time
 
-import requests
+from src.utils.http_client import create_session
 
 logger = logging.getLogger(__name__)
 
 
 class ProxyPoolService:
-    def __init__(self, proxy_pool_config=None):
+    def __init__(self, proxy_pool_config=None, http_client_config=None):
         """
         初始化代理池服务
         :param proxy_pool_config: 代理池配置
@@ -26,6 +26,8 @@ class ProxyPoolService:
         self.cache_file_path = self.config.get(
             "cache_file_path", "data/proxy_pool_cache.json"
         )
+        self.http_client_config = http_client_config or {}
+        self.session = None
 
         self._ensure_cache_directory()
         self._load_cached_proxies()
@@ -93,6 +95,11 @@ class ProxyPoolService:
 
         return None
 
+    def _get_session(self):
+        if self.session is None:
+            self.session = create_session(self.http_client_config)
+        return self.session
+
     def fetch_proxies(self):
         """
         从API获取代理
@@ -117,8 +124,7 @@ class ProxyPoolService:
                 "country_code": country_code,
             }
 
-            # 创建会话，根据配置选择是否使用代理
-            session = requests.Session()
+            session = self._get_session()
 
             # 获取传统代理配置
             proxy_config = self.config.get("proxy_config", {})
@@ -204,9 +210,7 @@ class ProxyPoolService:
         """
         try:
             # 创建会话，禁用系统代理，避免循环代理问题
-            session = requests.Session()
-            session.trust_env = False  # 禁用系统代理设置
-            response = session.get(
+            response = self._get_session().get(
                 "http://www.google.com",
                 proxies={"http": proxy_url, "https": proxy_url},
                 timeout=5,

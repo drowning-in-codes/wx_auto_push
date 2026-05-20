@@ -1,20 +1,26 @@
 import random
-import requests
-from bs4 import BeautifulSoup
-import time
 import os
+import time
 
 from src.utils.proxy_pool_service import ProxyPoolService
-
+from src.utils.http_client import create_session
 
 
 class BaseCrawler:
-    def __init__(self, urls, proxy_config=None, proxy_pool_config=None):
+    def __init__(
+        self,
+        urls,
+        proxy_config=None,
+        proxy_pool_config=None,
+        http_client_config=None,
+    ):
         self.urls = urls
         self.proxy_config = proxy_config or {}
         self.proxy_pool_config = proxy_pool_config or {}
+        self.http_client_config = http_client_config or {}
+        self.session = create_session(self.http_client_config)
         self.proxy_pool = None
-        
+
         # 初始化代理池服务
         if self.proxy_pool_config.get("enabled"):
             self.proxy_pool = ProxyPoolService(self.proxy_pool_config)
@@ -31,7 +37,7 @@ class BaseCrawler:
             proxy = self.proxy_pool.get_proxy()
             if proxy:
                 return proxy
-        
+
         # 如果代理池未启用或未获取到代理，使用传统代理配置
         if self.proxy_config.get("enabled"):
             return {
@@ -39,14 +45,14 @@ class BaseCrawler:
                 "https": self.proxy_config.get("https_proxy"),
             }
         # 如果代理未启用，清空环境变量
-        os.environ.pop('HTTP_PROXY', None)
-        os.environ.pop('HTTPS_PROXY', None)
-        return {"http": None, "https": None}
+        os.environ.pop("HTTP_PROXY", None)
+        os.environ.pop("HTTPS_PROXY", None)
+        return None
 
     def crawl(self):
         url = self.get_random_url()
         try:
-            response = requests.get(
+            response = self.session.get(
                 url, headers=self._get_headers(), proxies=self._get_proxies()
             )
             response.raise_for_status()
@@ -57,7 +63,7 @@ class BaseCrawler:
 
     def _get_headers(self):
         return {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0"
         }
 
     def parse(self, html, url):

@@ -1,12 +1,12 @@
-import requests
 import json
 import time
 import os
 from src.utils.cache_manager import CacheManager
+from src.utils.http_client import create_session
 
 
 class WeChatClient:
-    def __init__(self, app_id, app_secret, proxy_config=None):
+    def __init__(self, app_id, app_secret, proxy_config=None, http_client_config=None):
         self.app_id = app_id
         self.app_secret = app_secret
         self.cache = CacheManager()
@@ -14,6 +14,8 @@ class WeChatClient:
         self.token_expire_time = 0
         self.base_url = "https://api.weixin.qq.com"
         self.proxy_config = proxy_config or {}
+        self.http_client_config = http_client_config or {}
+        self.session = create_session(self.http_client_config)
 
     def get_access_token(self):
         """
@@ -142,7 +144,7 @@ class WeChatClient:
         kwargs["proxies"] = proxies
 
         # 发送请求
-        response = requests.request(method, url, **kwargs)
+        response = self.session.request(method, url, **kwargs)
         return response
 
     def create_menu(self, menu_data):
@@ -212,7 +214,7 @@ class WeChatClient:
         upload_url = f"{self.base_url}/cgi-bin/media/upload?access_token={access_token}&type=image"
 
         # 下载图片到临时文件
-        response = requests.get(image_url, stream=True)
+        response = self.session.get(image_url, stream=True)
         if response.status_code == 200:
             with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_file:
                 shutil.copyfileobj(response.raw, temp_file)
@@ -260,7 +262,7 @@ class WeChatClient:
         )
 
         # 下载图片到临时文件
-        response = requests.get(image_url, stream=True)
+        response = self.session.get(image_url, stream=True)
         if response.status_code == 200:
             with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_file:
                 shutil.copyfileobj(response.raw, temp_file)

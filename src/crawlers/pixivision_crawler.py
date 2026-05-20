@@ -1,19 +1,23 @@
 from .base_crawler import BaseCrawler
 from bs4 import BeautifulSoup
-import requests
 import time
 
 
 class PixivisionCrawler(BaseCrawler):
     def __init__(
-        self, urls, proxy_config=None, request_config=None, proxy_pool_config=None
+        self,
+        urls,
+        proxy_config=None,
+        request_config=None,
+        proxy_pool_config=None,
+        http_client_config=None,
     ):
-        super().__init__(urls, proxy_config, proxy_pool_config)
+        super().__init__(urls, proxy_config, proxy_pool_config, http_client_config)
         self.request_config = request_config or {}
 
     def _get_headers(self):
         return {
-            "Referer": "https://www.pixiv.net/",
+            "Referer": "https://www.pixivision.net/zh/",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
             "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
@@ -28,9 +32,7 @@ class PixivisionCrawler(BaseCrawler):
         url = self.urls[0]
         try:
             # 创建会话，禁用系统代理，避免代理冲突
-            session = requests.Session()
-            session.trust_env = False  # 禁用系统代理设置
-            response = session.get(
+            response = self.session.get(
                 url, headers=self._get_headers(), proxies=self._get_proxies()
             )
             response.raise_for_status()
@@ -53,9 +55,7 @@ class PixivisionCrawler(BaseCrawler):
                         time.sleep(delay)
 
                 # 创建会话，禁用系统代理，避免代理冲突
-                session = requests.Session()
-                session.trust_env = False  # 禁用系统代理设置
-                response = session.get(
+                response = self.session.get(
                     url, headers=self._get_headers(), proxies=self._get_proxies()
                 )
                 response.raise_for_status()
@@ -71,7 +71,7 @@ class PixivisionCrawler(BaseCrawler):
 
     def parse(self, html, url):
         if "c/illustration" in url:
-            return self._parse_illustration_list(html, url)
+            return self._parse_illustration_list(html)
         elif "/a/" in url:
             return self._parse_illustration_detail(html, url)
         elif url == "https://www.pixivision.net/zh/":
@@ -80,7 +80,7 @@ class PixivisionCrawler(BaseCrawler):
         else:
             return None
 
-    def _parse_illustration_list(self, html, url):
+    def _parse_illustration_list(self, html):
         """
         解析插画列表页面
         """
@@ -289,26 +289,23 @@ class PixivisionCrawler(BaseCrawler):
         爬取多个页面的插画列表
         """
         all_illustrations = []
-
         for page in range(start_page, end_page + 1):
+            params = {"p": page}
             if query:
-                page_url = f"{base_url}?q={query}&p={page}"
-            else:
-                page_url = f"{base_url}?p={page}"
+                params["q"] = query
             try:
                 # 创建会话，禁用系统代理，避免代理冲突
-                session = requests.Session()
-                session.trust_env = False  # 禁用系统代理设置
-                response = session.get(
-                    page_url, headers=self._get_headers(), proxies=self._get_proxies()
+                response = self.session.get(
+                    base_url,
+                    params=params,
+                    headers=self._get_headers(),
+                    proxies=self._get_proxies(),
                 )
                 response.raise_for_status()
-                page_illustrations = self._parse_illustration_list(
-                    response.text, page_url
-                )
+                page_illustrations = self._parse_illustration_list(response.text)
                 if page_illustrations:
                     all_illustrations.extend(page_illustrations)
             except Exception as e:
-                print(f"爬取 {page_url} 失败: {e}")
+                print(f"爬取 {base_url} 失败: {e}")
 
         return all_illustrations

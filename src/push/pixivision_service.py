@@ -1,10 +1,10 @@
 import os
-import requests
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.crawlers.crawler_factory import CrawlerFactory
 from src.utils.storage.storage_factory import StorageFactory
+from src.utils.http_client import create_session
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +15,7 @@ class PixivisionService:
         proxy_config=None,
         request_config=None,
         proxy_pool_config=None,
+        http_client_config=None,
         storage_type="json",
         **storage_kwargs,
     ):
@@ -30,8 +31,15 @@ class PixivisionService:
         self.proxy_config = proxy_config
         self.request_config = request_config
         self.proxy_pool_config = proxy_pool_config
+        self.http_client_config = http_client_config or {}
+        self.session = create_session(self.http_client_config)
         self.crawler = CrawlerFactory.create_crawler(
-            "pixivision", [self.base_url], proxy_config, request_config, proxy_pool_config
+            "pixivision",
+            [self.base_url],
+            proxy_config,
+            request_config,
+            proxy_pool_config,
+            self.http_client_config,
         )
         # 初始化存储服务
         self.storage = StorageFactory.create_storage(storage_type, **storage_kwargs)
@@ -84,7 +92,11 @@ class PixivisionService:
         """
         ranking_url = "https://www.pixivision.net/zh/"
         ranking_crawler = CrawlerFactory.create_crawler(
-            "pixivision", [ranking_url], self.proxy_config, self.request_config
+            "pixivision",
+            [ranking_url],
+            self.proxy_config,
+            self.request_config,
+            http_client_config=self.http_client_config,
         )
         # 直接调用 _parse_ranking_list 方法并指定容器索引为 0（排行榜）
         response = ranking_crawler.session.get(
@@ -108,7 +120,11 @@ class PixivisionService:
         """
         ranking_url = "https://www.pixivision.net/zh/"
         ranking_crawler = CrawlerFactory.create_crawler(
-            "pixivision", [ranking_url], self.proxy_config, self.request_config
+            "pixivision",
+            [ranking_url],
+            self.proxy_config,
+            self.request_config,
+            http_client_config=self.http_client_config,
         )
         # 直接调用 _parse_ranking_list 方法并指定容器索引为 1（推荐榜）
         response = ranking_crawler.session.get(
@@ -199,8 +215,8 @@ class PixivisionService:
                             }
                     else:
                         # 显式禁用代理，覆盖系统环境中的代理配置
-                        os.environ.pop('HTTP_PROXY', None)
-                        os.environ.pop('HTTPS_PROXY', None)
+                        os.environ.pop("HTTP_PROXY", None)
+                        os.environ.pop("HTTPS_PROXY", None)
 
                     # 下载图片
                     headers = {
@@ -210,8 +226,8 @@ class PixivisionService:
                         "Accept-Encoding": "gzip, deflate, br",
                         "Connection": "keep-alive",
                     }
-                    response = requests.get(
-                        image_url, timeout=30, proxies=proxies, headers=headers
+                    response = self.session.get(
+                        image_url,  proxies=proxies, headers=headers
                     )
                     response.raise_for_status()
 

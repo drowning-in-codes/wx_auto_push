@@ -1,12 +1,15 @@
-import requests
 import json
+
+from src.utils.http_client import create_session
 
 
 class LLMClient:
-    def __init__(self, config, proxy_config=None):
+    def __init__(self, config, proxy_config=None, http_client_config=None):
         self.model = config.get("model", "openai")
         self.config = config
         self.proxy_config = proxy_config or {}
+        self.http_client_config = http_client_config or {}
+        self.session = create_session(self.http_client_config)
 
         if self.model == "openai":
             openai_config = config.get("openai", {})
@@ -64,7 +67,7 @@ class LLMClient:
                 "max_tokens": 500,
             }
 
-            response = requests.post(
+            response = self.session.post(
                 self.api_url, headers=headers, json=data, proxies=self._get_proxies()
             )
             response.raise_for_status()
@@ -94,7 +97,7 @@ class LLMClient:
                 "max_tokens": 50,
             }
 
-            response = requests.post(
+            response = self.session.post(
                 self.api_url, headers=headers, json=data, proxies=self._get_proxies()
             )
             response.raise_for_status()
@@ -115,7 +118,7 @@ class LLMClient:
             }
 
             url = f"{self.api_url}?key={self.api_key}"
-            response = requests.post(
+            response = self.session.post(
                 url, headers=headers, json=data, proxies=self._get_proxies()
             )
             response.raise_for_status()
@@ -144,7 +147,7 @@ class LLMClient:
             }
 
             url = f"{self.api_url}?key={self.api_key}"
-            response = requests.post(
+            response = self.session.post(
                 url, headers=headers, json=data, proxies=self._get_proxies()
             )
             response.raise_for_status()

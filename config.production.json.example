@@ -92,6 +92,11 @@
     "max_retry": 3,
     "image_publish_type": "image" // 可选值：image（图片消息）或 news（图文消息）
   },
+  "http_client": {
+    "provider": "curl_cffi",
+    "impersonate": "chrome124",
+    "trust_env": false
+  },
   "proxy": {
     "enabled": false,
     "http_proxy": "http://localhost:7890",
