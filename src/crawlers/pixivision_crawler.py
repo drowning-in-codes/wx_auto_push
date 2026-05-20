@@ -1,5 +1,6 @@
 from .base_crawler import BaseCrawler
 from bs4 import BeautifulSoup
+import os
 import time
 
 
@@ -24,6 +25,28 @@ class PixivisionCrawler(BaseCrawler):
             "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
         }
+
+    def _get_download_headers(self, referer=None):
+        headers = self._get_headers().copy()
+        if referer:
+            headers["Referer"] = referer
+        return headers
+
+    def download_image(self, image_url, file_path, referer=None, timeout=30):
+        """下载单张图片到指定文件。"""
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        response = self.session.get(
+            image_url,
+            headers=self._get_download_headers(referer),
+            proxies=self._get_proxies(),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+
+        with open(file_path, "wb") as f:
+            f.write(response.content)
+
+        return file_path
 
     def crawl_one(self):
         """

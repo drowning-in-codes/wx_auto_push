@@ -21,7 +21,7 @@ class Config:
             self.config_path = env_config_path
         else:
             self.config_path = config_path
-
+    
         self.config = self._load_config()
 
     def _load_config(self):

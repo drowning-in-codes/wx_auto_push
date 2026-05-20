@@ -4,7 +4,6 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.crawlers.crawler_factory import CrawlerFactory
 from src.utils.storage.storage_factory import StorageFactory
-from src.utils.http_client import create_session
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,6 @@ class PixivisionService:
         self.request_config = request_config
         self.proxy_pool_config = proxy_pool_config
         self.http_client_config = http_client_config or {}
-        self.session = create_session(self.http_client_config)
         self.crawler = CrawlerFactory.create_crawler(
             "pixivision",
             [self.base_url],
@@ -77,7 +75,12 @@ class PixivisionService:
         """
         # 创建一个临时爬虫实例来爬取详情页
         detail_crawler = CrawlerFactory.create_crawler(
-            "pixivision", [illustration_url], self.proxy_config, self.request_config
+            "pixivision",
+            [illustration_url],
+            self.proxy_config,
+            self.request_config,
+            self.proxy_pool_config,
+            self.http_client_config,
         )
         illustration = detail_crawler.crawl()
         if save and self.storage and illustration:
@@ -203,34 +206,6 @@ class PixivisionService:
                         f"(尝试 {attempt+1}/{max_retries})"
                     )
 
-                    # 配置代理
-                    proxies = None
-                    if self.proxy_config and self.proxy_config.get("enabled", False):
-                        http_proxy = self.proxy_config.get("http_proxy", "")
-                        https_proxy = self.proxy_config.get("https_proxy", "")
-                        if http_proxy or https_proxy:
-                            proxies = {
-                                "http": http_proxy,
-                                "https": https_proxy,
-                            }
-                    else:
-                        # 显式禁用代理，覆盖系统环境中的代理配置
-                        os.environ.pop("HTTP_PROXY", None)
-                        os.environ.pop("HTTPS_PROXY", None)
-
-                    # 下载图片
-                    headers = {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-                        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
-                        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-                        "Accept-Encoding": "gzip, deflate, br",
-                        "Connection": "keep-alive",
-                    }
-                    response = self.session.get(
-                        image_url,  proxies=proxies, headers=headers
-                    )
-                    response.raise_for_status()
-
                     # 获取文件扩展名
                     ext = os.path.splitext(image_url.split("?")[0])[1]
                     if not ext:
@@ -240,8 +215,11 @@ class PixivisionService:
                     file_name = f"{index+1:03d}{ext}"
                     file_path = os.path.join(download_path, file_name)
 
-                    with open(file_path, "wb") as f:
-                        f.write(response.content)
+                    self.crawler.download_image(
+                        image_url,
+                        file_path,
+                        referer=illustration_url,
+                    )
 
                     logger.info(f"图片 {index+1}/{total} 下载成功: {file_name}")
                     return True, file_path
