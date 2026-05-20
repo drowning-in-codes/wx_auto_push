@@ -7,51 +7,49 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build:
+  # 1. 检查与测试任务（如果是 PR，只跑这个）
+  test:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7 # 假设当前最新稳定版
+        with:
+          enable-cache: true
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install the project
+        run: uv sync --all-extras --dev
 
-    - name: Lint and type check
-      run: |
-        # 添加lint和typecheck命令（如果项目有）
-        echo "Running lint and type check..."
+      # - name: Run Tests & Lint
+      #   run: |
+      #     # 如果你有测试，放开下面这行
+      #     # uv run pytest
+      #     uv run ruff check .
 
-    - name: Build Docker image
-      run: |
-        docker build -t wx-auto-push .
-
-  deploy:
-    needs: build
+  # 2. 构建与部署任务（仅限 Push 到主分支）
+  build-and-deploy:
+    needs: test
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
 
-    - name: Login to Docker Hub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKER_HUB_USERNAME }}
-        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-    - name: Build and push
-      uses: docker/build-push-action@v4
-      with:
-        context: .
-        push: true
-        tags: ${{ secrets.DOCKER_HUB_USERNAME }}/wx-auto-push:latest
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/wx-auto-push:latest
+          # 增加缓存配置，大幅提升后续构建速度
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

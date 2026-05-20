@@ -18,6 +18,7 @@
 - **消息状态检查**：35分钟后自动检查消息发送状态并更新数据库
 - **预览消息**：发送前可选择将消息发送给公众号主人进行预览
 - **代理配置**：支持HTTP/HTTPS代理设置，确保网络请求可通过代理路由
+- **代理池支持**：支持从代理池API获取代理，提高爬取的稳定性和可靠性
 - **立即推送**：支持立即推送指定类型的内容，无需等待调度器
 - **uv构建支持**：使用uv管理依赖和构建项目，提高安装速度
 - **CLI工具化**：支持完整的命令行工具，包括配置管理、登录认证、永久素材管理等
@@ -170,6 +171,20 @@ wx_auto_push/
     "enabled": false,
     "http_proxy": "http://localhost:7890",
     "https_proxy": "http://localhost:7890"
+  },
+  "proxy_pool": {
+    "enabled": false,
+    "api_url": "https://proxy.scdn.io/api/get_proxy.php",
+    "protocol": "all",
+    "count": 5,
+    "country_code": "",
+    "fetch_interval": 60,
+    "max_proxies": 10,
+    "proxy_config": {
+      "enabled": false,
+      "http_proxy": "http://localhost:7890",
+      "https_proxy": "http://localhost:7890"
+    }
   }
 }
 ```
@@ -190,6 +205,13 @@ wx_auto_push/
 - `PROXY_ENABLED` - 是否启用代理
 - `HTTP_PROXY` - HTTP代理地址
 - `HTTPS_PROXY` - HTTPS代理地址
+- `PROXY_POOL_ENABLED` - 是否启用代理池
+- `PROXY_POOL_API_URL` - 代理池API地址
+- `PROXY_POOL_PROTOCOL` - 代理协议类型
+- `PROXY_POOL_COUNT` - 每次获取的代理数量
+- `PROXY_POOL_COUNTRY_CODE` - 代理国家代码
+- `PROXY_POOL_FETCH_INTERVAL` - 代理刷新间隔（秒）
+- `PROXY_POOL_MAX_PROXIES` - 最大代理数量
 - `LLM_ENABLED` - 是否启用大模型
 - `NODE_ENV` - 运行环境（development/production）
 - `CACHE_TYPE` - 缓存类型，可选值：file（文件缓存）或 redis（Redis缓存）
@@ -833,23 +855,34 @@ uv run python main.py draft <subcommand> \[args]
    - 如需要通过代理访问网络，可在配置文件中设置代理信息
    - 支持HTTP和HTTPS代理
 
-8. **回调URL配置**：
+8. **代理池配置**：
+   - 支持从代理池API获取代理，提高爬取的稳定性和可靠性
+   - 可配置协议类型、国家代码、获取数量等参数
+   - 自动管理代理的刷新和选择
+   - 当代理池未启用或未获取到代理时，会自动回退到传统代理配置
+   - 可通过 proxy_config 配置连接代理池API时是否使用代理
+   - proxy_config.enabled: 是否启用代理连接代理池API
+   - proxy_config.http_proxy: HTTP代理地址
+   - proxy_config.https_proxy: HTTPS代理地址
+   - proxy_config 用于控制连接代理池API时是否使用代理，与爬取目标网站时使用的代理是独立的
+
+9. **回调URL配置**：
    - 用于接收微信服务器的群发消息结果通知
    - 需要在微信公众平台设置中配置对应的URL和Token
    - 支持自定义端口和主机地址
    - 自动处理MASSSENDJOBFINISH事件，更新消息状态
 
-9. **数据库记录**：
-   - 每条群发消息都会在数据库中保存详细记录
-   - 包含发送状态、成功人数、失败人数等信息
-   - 支持通过msg_id查询具体消息的发送结果
+10. **数据库记录**：
+    - 每条群发消息都会在数据库中保存详细记录
+    - 包含发送状态、成功人数、失败人数等信息
+    - 支持通过msg_id查询具体消息的发送结果
 
-10. **Access Token 存储**：
+11. **Access Token 存储**：
     - 默认使用本地文件缓存存储 access token
     - 可通过配置 `CACHE_TYPE=redis` 启用 Redis 缓存
     - Redis 缓存需要配置相应的 Redis 服务器信息
 
-11. **Pixivision 服务**：
+12. **Pixivision 服务**：
     - 支持从 Pixivision 网站爬取插画内容
     - 可获取插画列表和详情
     - 支持推送插画到微信公众号
