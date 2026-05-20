@@ -173,6 +173,22 @@ class Config:
                 config["push"] = {}
             config["push"]["image_publish_type"] = os.getenv("IMAGE_PUBLISH_TYPE")
 
+        # HTTP 客户端配置
+        if os.getenv("HTTP_CLIENT_PROVIDER"):
+            if "http_client" not in config:
+                config["http_client"] = {}
+            config["http_client"]["provider"] = os.getenv("HTTP_CLIENT_PROVIDER")
+        if os.getenv("HTTP_CLIENT_IMPERSONATE"):
+            if "http_client" not in config:
+                config["http_client"] = {}
+            config["http_client"]["impersonate"] = os.getenv("HTTP_CLIENT_IMPERSONATE")
+        if os.getenv("HTTP_CLIENT_TRUST_ENV"):
+            if "http_client" not in config:
+                config["http_client"] = {}
+            config["http_client"]["trust_env"] = (
+                os.getenv("HTTP_CLIENT_TRUST_ENV").lower() == "true"
+            )
+
     def get(self, key, default=None):
         keys = key.split(".")
         value = self.config
@@ -272,6 +288,20 @@ class Config:
                 "max_retries": 3,
                 "directory": "./downloads",
                 "enable_crawl_proxy_pool": True,
+            },
+        )
+
+    def get_http_client_config(self):
+        """
+        获取 HTTP 客户端配置
+        :return: HTTP 客户端配置字典
+        """
+        return self.get(
+            "http_client",
+            {
+                "provider": "curl_cffi",
+                "impersonate": "chrome124",
+                "trust_env": False,
             },
         )
 

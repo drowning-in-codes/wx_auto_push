@@ -19,6 +19,7 @@
 - **预览消息**：发送前可选择将消息发送给公众号主人进行预览
 - **代理配置**：支持HTTP/HTTPS代理设置，确保网络请求可通过代理路由
 - **代理池支持**：支持从代理池API获取代理，提高爬取的稳定性和可靠性
+- **HTTP 客户端切换**：默认使用 `curl_cffi`，也可通过配置切回 `requests`
 - **立即推送**：支持立即推送指定类型的内容，无需等待调度器
 - **uv构建支持**：使用uv管理依赖和构建项目，提高安装速度
 - **CLI工具化**：支持完整的命令行工具，包括配置管理、登录认证、永久素材管理等
@@ -167,6 +168,11 @@ wx_auto_push/
     "max_retry": 3,
     "image_publish_type": "image"  // 可选值：image（图片消息）或 news（图文消息）
   },
+  "http_client": {
+    "provider": "curl_cffi",
+    "impersonate": "chrome124",
+    "trust_env": false
+  },
   "proxy": {
     "enabled": false,
     "http_proxy": "http://localhost:7890",
@@ -212,6 +218,9 @@ wx_auto_push/
 - `PROXY_POOL_COUNTRY_CODE` - 代理国家代码
 - `PROXY_POOL_FETCH_INTERVAL` - 代理刷新间隔（秒）
 - `PROXY_POOL_MAX_PROXIES` - 最大代理数量
+- `HTTP_CLIENT_PROVIDER` - HTTP 客户端提供方，可选值：`curl_cffi`、`requests`
+- `HTTP_CLIENT_IMPERSONATE` - `curl_cffi` 的浏览器指纹模拟配置，例如 `chrome124`
+- `HTTP_CLIENT_TRUST_ENV` - 是否读取系统代理环境变量，默认 `false`
 - `LLM_ENABLED` - 是否启用大模型
 - `NODE_ENV` - 运行环境（development/production）
 - `CACHE_TYPE` - 缓存类型，可选值：file（文件缓存）或 redis（Redis缓存）

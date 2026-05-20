@@ -67,7 +67,9 @@ class WeChatAutoPush:
         # 初始化LLM客户端
         llm_config = self.config.get_llm_config()
         if llm_config.get("enabled"):
-            self.llm_client = LLMClient(llm_config, proxy_config)
+            self.llm_client = LLMClient(
+                llm_config, proxy_config, self.config.get_http_client_config()
+            )
 
         # 初始化推送服务
         self.push_service = WeChatPushService(self.config)
@@ -91,6 +93,7 @@ class WeChatAutoPush:
             proxy_config=proxy_config,
             request_config=self.config.get_request_config(),
             proxy_pool_config=proxy_pool_config,
+            http_client_config=self.config.get_http_client_config(),
             storage_type="json",
             file_path="data/illustrations.json",
         )
@@ -943,6 +946,7 @@ def main():
     )
     draft_create_parser.add_argument(
         "--message_type",
+        "--message-type",
         choices=["news", "newspic"],
         default="news",
         help="消息类型，news(图文消息)或newspic(图片消息)",

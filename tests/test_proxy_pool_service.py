@@ -64,9 +64,7 @@ class TestProxyPoolService(unittest.TestCase):
         session = MagicMock()
         session.get.return_value = response
 
-        with patch(
-            "src.utils.proxy_pool_service.requests.Session", return_value=session
-        ):
+        with patch("src.utils.proxy_pool_service.create_session", return_value=session):
             proxies = service.fetch_proxies()
 
         self.assertEqual(proxies, ["10.0.0.1:9000", "10.0.0.2:9000"])
@@ -85,9 +83,7 @@ class TestProxyPoolService(unittest.TestCase):
         session = MagicMock()
         session.get.side_effect = Exception("network error")
 
-        with patch(
-            "src.utils.proxy_pool_service.requests.Session", return_value=session
-        ):
+        with patch("src.utils.proxy_pool_service.create_session", return_value=session):
             proxies = service.fetch_proxies()
 
         self.assertEqual(service.proxies, ["127.0.0.1:8080"])

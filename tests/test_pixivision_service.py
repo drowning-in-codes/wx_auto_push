@@ -15,7 +15,10 @@ class TestPixivisionService(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.storage_file = os.path.join(self.temp_dir, "test_illustrations.json")
 
-        with patch("src.push.pixivision_service.CrawlerFactory.create_crawler"):
+        with (
+            patch("src.push.pixivision_service.CrawlerFactory.create_crawler"),
+            patch("src.push.pixivision_service.create_session"),
+        ):
             self.service = PixivisionService(
                 proxy_config=self.proxy_config,
                 request_config=self.request_config,
@@ -115,9 +118,11 @@ class TestPixivisionService(unittest.TestCase):
         results = self.service.search_illustrations("测试")
         self.assertGreaterEqual(len(results), 1)
 
-    @patch("src.push.pixivision_service.requests.get")
+    @patch("src.push.pixivision_service.create_session")
     @patch("src.push.pixivision_service.CrawlerFactory.create_crawler")
-    def test_download_illustration_images(self, mock_create_crawler, mock_get):
+    def test_download_illustration_images(
+        self, mock_create_crawler, mock_create_session
+    ):
         """测试下载插画图片"""
         mock_crawler = Mock()
         mock_crawler.crawl.return_value = {
@@ -130,7 +135,9 @@ class TestPixivisionService(unittest.TestCase):
         mock_response = Mock()
         mock_response.content = b"fake_image_data"
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+        mock_session = Mock()
+        mock_session.get.return_value = mock_response
+        mock_create_session.return_value = mock_session
 
         service = PixivisionService(
             proxy_config=self.proxy_config, request_config=self.request_config

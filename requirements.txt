@@ -27,6 +27,7 @@ python-dotenv==1.2.2
 pywin32-ctypes==0.2.3
 redis==7.4.0
 requests==2.33.1
+curl_cffi>=0.15.0
 setuptools==82.0.1
 six==1.17.0
 soupsieve==2.8.3

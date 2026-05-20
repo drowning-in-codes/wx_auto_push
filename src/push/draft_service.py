@@ -1,12 +1,12 @@
 import os
 import tempfile
 import time
-import requests
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.utils.image_compressor import ImageCompressor
 from src.push.upload_history_service import UploadHistoryService
 from src.utils.proxy_pool_service import ProxyPoolService
+from src.utils.http_client import create_session
 
 # 配置日志
 logging.basicConfig(
@@ -32,13 +32,19 @@ class DownloadAndDraftService:
         self.proxy_pool_config = config.get_proxy_pool_config()
         self.request_config = config.get_request_config()
         self.download_config = config.get_download_config()
+        self.http_client_config = config.get_http_client_config()
+        self.session = create_session(self.http_client_config)
         self.upload_history = UploadHistoryService()
 
         # 初始化代理池服务
         self.proxy_pool = None
-        enable_crawl_proxy_pool = self.download_config.get("enable_crawl_proxy_pool", False)
+        enable_crawl_proxy_pool = self.download_config.get(
+            "enable_crawl_proxy_pool", False
+        )
         if enable_crawl_proxy_pool and self.proxy_pool_config.get("enabled"):
-            self.proxy_pool = ProxyPoolService(self.proxy_pool_config)
+            self.proxy_pool = ProxyPoolService(
+                self.proxy_pool_config, self.http_client_config
+            )
 
     def _get_pixiv_headers(self):
         return {
@@ -88,8 +94,8 @@ class DownloadAndDraftService:
                         }
                 else:
                     # 显式禁用代理，覆盖系统环境中的代理配置
-                    os.environ.pop('HTTP_PROXY', None)
-                    os.environ.pop('HTTPS_PROXY', None)
+                    os.environ.pop("HTTP_PROXY", None)
+                    os.environ.pop("HTTPS_PROXY", None)
 
                 # 创建临时文件
                 with tempfile.NamedTemporaryFile(
@@ -98,7 +104,7 @@ class DownloadAndDraftService:
                     temp_image_path = temp_file.name
 
                 headers = self._get_pixiv_headers()
-                response = requests.get(
+                response = self.session.get(
                     image_url, timeout=10, proxies=proxy_config, headers=headers
                 )
                 response.raise_for_status()

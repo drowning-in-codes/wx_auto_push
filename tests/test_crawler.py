@@ -58,13 +58,15 @@ class TestBaseCrawler(unittest.TestCase):
         self.assertIn("User-Agent", headers)
         self.assertIn("Mozilla", headers["User-Agent"])
 
-    @patch("requests.get")
-    def test_crawl_success(self, mock_get):
+    @patch("src.crawlers.base_crawler.create_session")
+    def test_crawl_success(self, mock_create_session):
         """测试爬取成功"""
         mock_response = Mock()
         mock_response.text = "<html><body>Test</body></html>"
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+        mock_session = Mock()
+        mock_session.get.return_value = mock_response
+        mock_create_session.return_value = mock_session
 
         class TestCrawler(BaseCrawler):
             def parse(self, html, url):
@@ -122,8 +124,8 @@ class TestPixivisionCrawler(unittest.TestCase):
         self.urls = ["https://www.pixivision.net/zh/c/illustration"]
         self.proxy_config = {"enabled": False}
 
-    @patch("requests.get")
-    def test_crawl_one(self, mock_get):
+    @patch("src.crawlers.base_crawler.create_session")
+    def test_crawl_one(self, mock_create_session):
         """测试爬取单个页面"""
         mock_response = Mock()
         mock_response.text = """
@@ -136,7 +138,9 @@ class TestPixivisionCrawler(unittest.TestCase):
         </html>
         """
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+        mock_session = Mock()
+        mock_session.get.return_value = mock_response
+        mock_create_session.return_value = mock_session
 
         from src.crawlers.pixivision_crawler import PixivisionCrawler
 
