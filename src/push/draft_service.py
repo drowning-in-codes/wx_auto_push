@@ -301,15 +301,17 @@ class DownloadAndDraftService:
                     title = title[:32]
                     print(f"标题超过32个字符，已裁剪为: {title}")
 
-            # 上传图片到永久素材库
+            # 上传图片到永久素材库（先压缩/准备上传列表，再批量提交）
             print(f"\n开始上传 {len(image_files)} 张图片到永久素材库...")
             media_ids = []
 
+            upload_list = []
             for i, image_path in enumerate(image_files):
                 print(
                     f"处理图片 {i+1}/{len(image_files)}: {os.path.basename(image_path)}"
                 )
 
+                compressed_path = image_path
                 # 压缩图片（如果需要）
                 if compress:
                     compressed_path = compressor.compress(image_path)
@@ -317,23 +319,41 @@ class DownloadAndDraftService:
                         print(f"  图片已压缩")
                         if compressed_path not in temp_files:
                             temp_files.append(compressed_path)
-                else:
-                    compressed_path = image_path
-                    print(f"  压缩已跳过")
 
-                # 上传图片到永久素材库
-                try:
-                    result = self.push_service.material_service.add_material(
-                        "image", compressed_path
+                upload_list.append(compressed_path)
+
+            # 并发数量：优先使用 download_config.max_workers，再退回到默认5
+            concurrency = (
+                min(self.download_config.get("max_workers", 5), len(upload_list)) or 1
+            )
+
+            try:
+                results = self.push_service.material_service.batch_add_material(
+                    "image", upload_list, concurrency=concurrency
+                )
+            except Exception as e:
+                print(f"批量上传失败: {e}")
+                results = []
+
+            # 处理批量上传结果
+            for res in results:
+                media_file = res.get("media_file")
+                err = res.get("error")
+                json_data = res.get("json")
+                if err:
+                    print(f"  上传失败: {media_file} -> {err}")
+                    continue
+                if (
+                    json_data
+                    and isinstance(json_data, dict)
+                    and "media_id" in json_data
+                ):
+                    media_ids.append(json_data["media_id"])
+                    print(
+                        f"  上传成功，Media ID: {json_data['media_id']} ({media_file})"
                     )
-
-                    if "media_id" in result:
-                        media_ids.append(result["media_id"])
-                        print(f"  上传成功，Media ID: {result['media_id']}")
-                    else:
-                        print(f"  上传失败: {result}")
-                except Exception as e:
-                    print(f"  上传失败: {e}")
+                else:
+                    print(f"  上传失败或返回格式异常: {media_file} -> {json_data}")
 
             # 清理临时文件
             for temp_file in temp_files:

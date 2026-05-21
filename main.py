@@ -708,7 +708,7 @@ class WeChatAutoPush:
         digest=None,
         content=None,
         show_cover=1,
-        message_type="news",
+        message_type="newspic",
     ):
         """
         上传图片并创建草稿

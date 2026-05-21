@@ -1,6 +1,7 @@
 import json
 import time
 import os
+import concurrent.futures
 from src.utils.cache_manager import CacheManager
 from src.utils.http_client import create_client
 
@@ -15,7 +16,9 @@ class WeChatClient:
         self.base_url = "https://api.weixin.qq.com"
         self.proxy_config = proxy_config or {}
         self.http_client_config = http_client_config or {}
-        self.http_client = create_client(self.http_client_config)
+        self.http_client = create_client(
+            self.http_client_config, proxy_config=self.proxy_config
+        )
         self.session = self.http_client.session
 
     def get_access_token(self):
@@ -559,24 +562,84 @@ class WeChatClient:
             # 微信接口要求 description 字段为 JSON 字符串
             data["description"] = json.dumps(desc, ensure_ascii=False)
 
-        # 直接使用项目的 http_client session 发送（不走 _request 的拦截逻辑）
-        if self.proxy_config.get("enabled"):
-            proxies = {
-                "http": self.proxy_config.get("http_proxy"),
-                "https": self.proxy_config.get("https_proxy"),
-            }
-        else:
-            proxies = {"http": None, "https": None}
-
-        timeout = self.http_client_config.get("timeout", 60)
-        response = self.http_client.upload_img(
-            url,
-            media_file,
-            data=data,
-            proxies=proxies,
-            timeout=timeout,
-        )
+        # 直接使用项目的 http_client（已在 HttpClient 中处理代理与超时默认值）
+        response = self.http_client.upload_img(url, media_file, data=data)
         return response.json()
+
+    def batch_add_material(self, material_type, media_files, concurrency=5):
+        """
+        批量上传永久素材。
+        media_files: 列表，每项可以是:
+          - 字符串: media_file 路径
+          - 元组/列表: (media_file, title, introduction)
+          - 字典: {"media_file":..., "title":..., "introduction":...}
+        concurrency: 并发数量，默认5
+        返回: 每个文件的上传结果列表，包含 media_file, status_code, json, error
+        """
+        access_token = self.get_stable_access_token()
+        url = f"{self.base_url}/cgi-bin/material/add_material?access_token={access_token}&type={material_type}"
+
+        # HttpClient 已包含代理和超时默认值，无需在此重复构造
+
+        def _normalize(entry):
+            if isinstance(entry, dict):
+                media_file = entry.get("media_file")
+                title = entry.get("title")
+                introduction = entry.get("introduction")
+            elif isinstance(entry, (list, tuple)):
+                length = len(entry)
+                media_file = entry[0] if length > 0 else None
+                title = entry[1] if length > 1 else None
+                introduction = entry[2] if length > 2 else None
+            else:
+                media_file = entry
+                title = None
+                introduction = None
+            return media_file, title, introduction
+
+        def _upload(entry):
+            media_file, title, introduction = _normalize(entry)
+            data = {}
+            if title or introduction:
+                desc = {}
+                if title:
+                    desc["title"] = title
+                if introduction:
+                    desc["introduction"] = introduction
+                data["description"] = json.dumps(desc, ensure_ascii=False)
+
+            try:
+                resp = self.http_client.upload_img(url, media_file, data=data)
+                result = None
+                try:
+                    result = resp.json()
+                except Exception:
+                    result = {"raw_text": resp.text if resp is not None else None}
+                return {
+                    "media_file": str(media_file),
+                    "status_code": getattr(resp, "status_code", None),
+                    "json": result,
+                    "error": None,
+                }
+            except Exception as e:
+                return {
+                    "media_file": str(media_file),
+                    "status_code": None,
+                    "json": None,
+                    "error": str(e),
+                }
+
+        results = []
+        if concurrency and concurrency > 1:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as exe:
+                futures = [exe.submit(_upload, entry) for entry in media_files]
+                for fut in concurrent.futures.as_completed(futures):
+                    results.append(fut.result())
+        else:
+            for entry in media_files:
+                results.append(_upload(entry))
+
+        return results
 
     def delete_material(self, media_id):
         """
