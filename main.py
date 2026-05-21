@@ -10,6 +10,7 @@ import sys
 import time
 import argparse
 import threading
+import signal
 from datetime import datetime
 
 # 添加项目根目录到 Python 路径
@@ -42,7 +43,7 @@ class WeChatAutoPush:
         self._initialize_components()
         self._initialize_callback_server()
 
-    def _create_schedule_manager(self, schedule_kind="push"):
+    def _create_schedule_manager(self, schedule_kind="draft"):
         """
         创建对应任务类型的调度器
         """
@@ -54,6 +55,35 @@ class WeChatAutoPush:
             schedule_config = self.config.get_push_schedule_config()
 
         return ScheduleManager(self.config, task_func, schedule_config=schedule_config)
+
+    def _run_schedule_with_stop_fallback(self, schedule_kind="push"):
+        """
+        运行调度任务，并统一安装 Ctrl+C / SIGTERM 停止兜底。
+        """
+
+        def _handle_stop_signal(signum, frame):
+            print("\n收到停止信号，正在关闭服务...")
+            if self.schedule_manager:
+                self.schedule_manager.stop(force=True)
+            # 这样可以触发下面的 finally 块，把信号恢复回去，优雅安全
+            sys.exit(130)
+
+        previous_sigint = signal.getsignal(signal.SIGINT)
+        previous_sigterm = signal.getsignal(signal.SIGTERM)
+        print(f"当前运行线程名称: {threading.current_thread().name}")
+        signal.signal(signal.SIGINT, _handle_stop_signal)
+        signal.signal(signal.SIGTERM, _handle_stop_signal)
+
+        try:
+            self.schedule_manager = self._create_schedule_manager(schedule_kind)
+            self.schedule_manager.start()
+        except (KeyboardInterrupt, SystemExit):
+            print("服务已停止")
+            if self.schedule_manager:
+                self.schedule_manager.stop(force=True)
+        finally:
+            signal.signal(signal.SIGINT, previous_sigint)
+            signal.signal(signal.SIGTERM, previous_sigterm)
 
     def _initialize_components(self):
         # 初始化爬虫
@@ -125,7 +155,7 @@ class WeChatAutoPush:
         )
 
         # 初始化默认调度器（推送）
-        self.schedule_manager = self._create_schedule_manager("push")
+        # self.schedule_manager = self._create_schedule_manager("push")
 
     def save_wechat_config(self, config_data):
         """
@@ -214,21 +244,22 @@ class WeChatAutoPush:
         """
         运行草稿任务
         """
-        try:
-            upload_config = self.config.get_upload_config()
-            self.draft_service.create_draft_from_random_pixivision(
-                upload_config.get("start_page", 1),
-                upload_config.get("end_page", 3),
-                upload_config.get("title"),
-                upload_config.get("author"),
-                upload_config.get("compress"),
-                upload_config.get("digest"),
-                upload_config.get("content"),
-                upload_config.get("show_cover", 1),
-                upload_config.get("message_type", "newspic"),
-            )
-        except Exception as e:
-            print(f"运行草稿任务时出错: {e}")
+        print("test")
+        # try:
+        #     upload_config = self.config.get_upload_config()
+        #     self.draft_service.create_draft_from_random_pixivision(
+        #         upload_config.get("start_page", 1),
+        #         upload_config.get("end_page", 3),
+        #         upload_config.get("title"),
+        #         upload_config.get("author"),
+        #         upload_config.get("compress"),
+        #         upload_config.get("digest"),
+        #         upload_config.get("content"),
+        #         upload_config.get("show_cover", 1),
+        #         upload_config.get("message_type", "newspic"),
+        #     )
+        # except Exception as e:
+        #     print(f"运行草稿任务时出错: {e}")
 
     def push_text_message(self, content=None):
         """
@@ -738,16 +769,11 @@ class WeChatAutoPush:
         """
         运行自动推送服务
         """
-        print("微信公众号自动推送服务启动")
-        print("按 Ctrl+C 停止服务")
-
-        try:
-            self.schedule_manager = self._create_schedule_manager(schedule_kind)
-            # 启动调度器
-            self.schedule_manager.start()
-        except KeyboardInterrupt:
-            print("服务已停止")
-            self.schedule_manager.stop()
+        if schedule_kind == "push":
+            print("微信公众号自动推送服务启动")
+        else:
+            print("微信公众号爬取图片上传草稿服务启动")
+        self._run_schedule_with_stop_fallback(schedule_kind)
 
     def run_schedule(self, schedule_kind="push"):
         """

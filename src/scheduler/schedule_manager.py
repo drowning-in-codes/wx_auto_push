@@ -1,15 +1,35 @@
+from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
+import os
 import random
-import time
 
 
 class ScheduleManager:
-    def __init__(self, config, task_func, schedule_config=None):
+    def __init__(self, config, task_func, task_type="upload", schedule_config=None):
         self.config = config
         self.task_func = task_func
-        self.scheduler = BlockingScheduler()
+        self.task_type = task_type
+        # 💡 核心修复：必须使用 APScheduler 官方标准的配置字典格式！
+        scheduler_configs = {
+            # 1. 配置 executors，直接在 default 字典里设置 wait_max
+            "executors": {
+                "default": {
+                    "type": "threadpool",  # 显式指定默认执行器为线程池
+                    "wait_max": 2,  # 核心：1秒呼吸一次，留出 Ctrl+C 呼吸口
+                }
+            },
+            # 2. 配置任务默认值
+            "job_defaults": {
+                "coalesce": True,
+                "max_instances": 1,
+                "misfire_grace_time": 60,
+            },
+        }
+        # 将规范的配置字典传给调度器
+        self.scheduler = BlockingScheduler(scheduler_configs)
         self.schedule_config = schedule_config or config.get_schedule_config()
+        self._stopped = False
 
     def setup_schedule(self):
         weekly_frequency = self.schedule_config.get("weekly_frequency", 3)
@@ -40,7 +60,7 @@ class ScheduleManager:
             self.scheduler.add_job(
                 self.task_func,
                 CronTrigger(day_of_week=day, hour=hour, minute=minute),
-                id=f"push_task_{day}",
+                id=f"{self.task_type}_task_{day}",
                 replace_existing=True,
             )
 
@@ -50,6 +70,7 @@ class ScheduleManager:
         return days[:count]
 
     def start(self):
+        self._stopped = False
         self.setup_schedule()
         print("调度器已启动，开始执行定时任务...")
         print("按 Ctrl+C 停止服务")
@@ -57,15 +78,27 @@ class ScheduleManager:
             self.scheduler.start()
         except (KeyboardInterrupt, SystemExit):
             print("\n收到停止信号，正在关闭调度器...")
-            self.stop()
+            self.stop(force=True)
         except Exception as e:
             print(f"调度器运行异常: {e}")
-            self.stop()
+            self.stop(force=True)
             raise
 
-    def stop(self):
-        self.scheduler.shutdown()
+    def stop(self, force=False):
+        if self._stopped:
+            return
+        self._stopped = True
+
+        if self.scheduler.running:
+            try:
+                self.scheduler.shutdown(wait=not force)
+            except Exception as e:
+                print(f"关闭调度器时发生异常: {e}")
+
         print("调度器已停止")
+
+        if force:
+            os._exit(130)
 
     def run_once(self):
         """立即执行一次任务"""
@@ -105,9 +138,9 @@ class ScheduleManager:
 
         except KeyboardInterrupt:
             print("\n收到停止信号，正在关闭调度器...")
-            self.scheduler.shutdown()
+            self.scheduler.shutdown(wait=False)
             print("调度器已停止")
         except Exception as e:
             print(f"调度器运行异常: {e}")
-            self.scheduler.shutdown()
+            self.scheduler.shutdown(wait=False)
             raise
