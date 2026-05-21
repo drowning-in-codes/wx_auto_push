@@ -21,7 +21,7 @@ class Config:
             self.config_path = env_config_path
         else:
             self.config_path = config_path
-    
+
         self.config = self._load_config()
 
     def _load_config(self):
@@ -215,18 +215,39 @@ class Config:
 
     def get_upload_config(self):
         return self.get(
-            "schedule.upload",
-            {
-                "start_page": 1,
-                "end_page": 3,
-                "title": "",
-                "author": "",
-                "compress": True,
-                "digest": "",
-                "content": "",
-                "show_cover": 1,
-                "message_type": "newspic",
-            },
+            "schedule.draft.upload",
+            self.get(
+                "schedule.upload",
+                {
+                    "start_page": 1,
+                    "end_page": 3,
+                    "title": "",
+                    "author": "",
+                    "compress": True,
+                    "digest": "",
+                    "content": "",
+                    "show_cover": 1,
+                    "message_type": "newspic",
+                },
+            ),
+        )
+
+    def get_push_schedule_config(self):
+        """
+        获取推送调度配置
+        """
+        return self.get(
+            "schedule.push",
+            self.get_schedule_config(),
+        )
+
+    def get_draft_schedule_config(self):
+        """
+        获取上传草稿调度配置
+        """
+        return self.get(
+            "schedule.draft",
+            self.get_schedule_config(),
         )
 
     def get_schedule_config(self):
@@ -372,10 +393,22 @@ class Config:
         """
         设置推送时间范围
         """
-        self.set("schedule.time_range", {"start": start, "end": end})
+        self.set("schedule.push.time_range", {"start": start, "end": end})
+
+    def set_draft_time_range(self, start, end):
+        """
+        设置上传草稿时间范围
+        """
+        self.set("schedule.draft.time_range", {"start": start, "end": end})
 
     def set_weekly_push_frequency(self, frequency):
         """
         设置每周推送频率
         """
-        self.set("schedule.weekly_frequency", frequency)
+        self.set("schedule.push.weekly_frequency", frequency)
+
+    def set_weekly_draft_frequency(self, frequency):
+        """
+        设置每周上传草稿频率
+        """
+        self.set("schedule.draft.weekly_frequency", frequency)

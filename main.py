@@ -42,6 +42,19 @@ class WeChatAutoPush:
         self._initialize_components()
         self._initialize_callback_server()
 
+    def _create_schedule_manager(self, schedule_kind="push"):
+        """
+        创建对应任务类型的调度器
+        """
+        if schedule_kind == "draft":
+            task_func = self._run_draft_task
+            schedule_config = self.config.get_draft_schedule_config()
+        else:
+            task_func = self._run_push_task
+            schedule_config = self.config.get_push_schedule_config()
+
+        return ScheduleManager(self.config, task_func, schedule_config=schedule_config)
+
     def _initialize_components(self):
         # 初始化爬虫
         anime_sources = self.config.get_anime_sources()
@@ -81,7 +94,10 @@ class WeChatAutoPush:
         wechat_config = self.config.get_wechat_config()
         proxy_config = self.config.get_proxy_config()
         wechat_client = WeChatClient(
-            wechat_config.get("app_id"), wechat_config.get("app_secret"), proxy_config
+            wechat_config.get("app_id"),
+            wechat_config.get("app_secret"),
+            proxy_config,
+            self.config.get_http_client_config(),
         )
         self.wechat_draft_service = WeChatDraftService(wechat_client)
 
@@ -108,8 +124,8 @@ class WeChatAutoPush:
             self.config,
         )
 
-        # 初始化调度器
-        self.schedule_manager = ScheduleManager(self.config, self._run_push_task)
+        # 初始化默认调度器（推送）
+        self.schedule_manager = self._create_schedule_manager("push")
 
     def save_wechat_config(self, config_data):
         """
@@ -193,6 +209,26 @@ class WeChatAutoPush:
                 print(f"不支持的推送类型: {push_type}")
         except Exception as e:
             print(f"运行推送任务时出错: {e}")
+
+    def _run_draft_task(self):
+        """
+        运行草稿任务
+        """
+        try:
+            upload_config = self.config.get_upload_config()
+            self.draft_service.create_draft_from_random_pixivision(
+                upload_config.get("start_page", 1),
+                upload_config.get("end_page", 3),
+                upload_config.get("title"),
+                upload_config.get("author"),
+                upload_config.get("compress"),
+                upload_config.get("digest"),
+                upload_config.get("content"),
+                upload_config.get("show_cover", 1),
+                upload_config.get("message_type", "newspic"),
+            )
+        except Exception as e:
+            print(f"运行草稿任务时出错: {e}")
 
     def push_text_message(self, content=None):
         """
@@ -478,41 +514,59 @@ class WeChatAutoPush:
         except Exception as e:
             print(f"获取存储的插画失败: {e}")
 
-    def set_schedule_time(self, start, end):
+    def set_schedule_time(self, start, end, schedule_kind="push"):
         """
         设置推送时间范围
         """
         try:
-            self.config.set_push_time_range(start, end)
-            print(f"推送时间范围已设置为: {start} - {end}")
+            if schedule_kind == "draft":
+                self.config.set_draft_time_range(start, end)
+                print(f"草稿时间范围已设置为: {start} - {end}")
+            else:
+                self.config.set_push_time_range(start, end)
+                print(f"推送时间范围已设置为: {start} - {end}")
         except Exception as e:
             print(f"设置时间范围失败: {e}")
 
-    def set_schedule_frequency(self, weekly_frequency):
+    def set_schedule_frequency(self, weekly_frequency, schedule_kind="push"):
         """
         设置推送频率
         """
         try:
-            self.config.set_weekly_push_frequency(weekly_frequency)
-            print(f"每周推送频率已设置为: {weekly_frequency} 次")
+            if schedule_kind == "draft":
+                self.config.set_weekly_draft_frequency(weekly_frequency)
+                print(f"每周草稿频率已设置为: {weekly_frequency} 次")
+            else:
+                self.config.set_weekly_push_frequency(weekly_frequency)
+                print(f"每周推送频率已设置为: {weekly_frequency} 次")
         except Exception as e:
             print(f"设置推送频率失败: {e}")
 
-    def view_schedule_config(self):
+    def view_schedule_config(self, schedule_kind="push"):
         """
         查看当前调度配置
         """
         try:
-            config = self.config.get_schedule_config()
+            if schedule_kind == "draft":
+                config = self.config.get_draft_schedule_config()
+                task_name = "草稿"
+            else:
+                config = self.config.get_push_schedule_config()
+                task_name = "推送"
+
             time_range = config.get("time_range", {})
             start_time = time_range.get("start")
             end_time = time_range.get("end")
+            frequency_label = (
+                "每周推送频率" if schedule_kind == "push" else "每周草稿频率"
+            )
 
-            print("当前调度配置:")
-            print(f"推送时间范围: {start_time} - {end_time}")
-            print(f"每周推送频率: {config.get('weekly_frequency')} 次")
-            print(f"推送类型: {config.get('push_type')}")
-            print(f"是否启用推送: {'是' if config.get('enable_push') else '否'}")
+            print(f"当前{task_name}调度配置:")
+            print(f"{task_name}时间范围: {start_time} - {end_time}")
+            print(f"{frequency_label}: {config.get('weekly_frequency')} 次")
+            if schedule_kind == "push":
+                print(f"推送类型: {config.get('push_type')}")
+                print(f"是否启用推送: {'是' if config.get('enable_push') else '否'}")
         except Exception as e:
             print(f"查看调度配置失败: {e}")
 
@@ -680,7 +734,7 @@ class WeChatAutoPush:
             message_type,
         )
 
-    def run(self):
+    def run(self, schedule_kind="push"):
         """
         运行自动推送服务
         """
@@ -688,27 +742,33 @@ class WeChatAutoPush:
         print("按 Ctrl+C 停止服务")
 
         try:
+            self.schedule_manager = self._create_schedule_manager(schedule_kind)
             # 启动调度器
             self.schedule_manager.start()
         except KeyboardInterrupt:
             print("服务已停止")
             self.schedule_manager.stop()
 
-    def run_schedule(self):
+    def run_schedule(self, schedule_kind="push"):
         """
         启动调度推送
         """
-        self.run()
+        self.run(schedule_kind)
 
-    def run_once(self):
+    def run_once(self, schedule_kind="push"):
         """
         执行一次推送后关闭
         """
         try:
-            print("执行一次推送...")
-            # 直接执行推送任务
-            self._run_push_task()
-            print("推送执行完成，服务已关闭")
+            if schedule_kind == "draft":
+                print("执行一次草稿创建...")
+                self._run_draft_task()
+                print("草稿创建执行完成，服务已关闭")
+            else:
+                print("执行一次推送...")
+                # 直接执行推送任务
+                self._run_push_task()
+                print("推送执行完成，服务已关闭")
         except Exception as e:
             print(f"执行推送失败: {e}")
 
@@ -746,37 +806,34 @@ def main():
         dest="schedule_command", help="调度管理命令"
     )
 
-    # 设置时间范围
-    schedule_time_parser = schedule_subparsers.add_parser(
-        "time", help="设置推送时间范围"
-    )
-    schedule_time_parser.add_argument(
-        "--start", required=True, help="开始时间，格式：HH:MM"
-    )
-    schedule_time_parser.add_argument(
-        "--end", required=True, help="结束时间，格式：HH:MM"
-    )
+    def add_schedule_actions(parent_parser, dest_name, task_label):
+        action_subparsers = parent_parser.add_subparsers(
+            dest=dest_name, help=f"{task_label}调度命令"
+        )
 
-    # 设置频率
-    schedule_frequency_parser = schedule_subparsers.add_parser(
-        "frequency", help="设置推送频率"
-    )
-    schedule_frequency_parser.add_argument(
-        "weekly_frequency", type=int, help="每周推送次数"
-    )
+        time_parser = action_subparsers.add_parser(
+            "time", help=f"设置{task_label}时间范围"
+        )
+        time_parser.add_argument("--start", required=True, help="开始时间，格式：HH:MM")
+        time_parser.add_argument("--end", required=True, help="结束时间，格式：HH:MM")
 
-    # 查看当前调度配置
-    schedule_view_parser = schedule_subparsers.add_parser(
-        "view", help="查看当前调度配置"
-    )
+        frequency_parser = action_subparsers.add_parser(
+            "frequency", help=f"设置{task_label}频率"
+        )
+        frequency_parser.add_argument("weekly_frequency", type=int, help="每周执行次数")
 
-    # 启动调度推送
-    schedule_run_parser = schedule_subparsers.add_parser("run", help="启动调度推送")
+        action_subparsers.add_parser("view", help=f"查看当前{task_label}调度配置")
+        action_subparsers.add_parser("run", help=f"启动{task_label}调度")
+        action_subparsers.add_parser("run-once", help=f"执行一次{task_label}任务后关闭")
 
-    # 执行一次推送后关闭
-    schedule_run_once_parser = schedule_subparsers.add_parser(
-        "run-once", help="执行一次推送后关闭"
-    )
+        return action_subparsers
+
+    # 新增二级命令：schedule push ... / schedule draft ...
+    push_schedule_parser = schedule_subparsers.add_parser("push", help="推送调度")
+    add_schedule_actions(push_schedule_parser, "push_schedule_action", "推送")
+
+    draft_schedule_parser = schedule_subparsers.add_parser("draft", help="草稿调度")
+    add_schedule_actions(draft_schedule_parser, "draft_schedule_action", "草稿")
 
     # Pixivision 管理命令
     pixivision_parser = subparsers.add_parser("pixivision", help="Pixivision 管理")
@@ -1007,16 +1064,26 @@ def main():
             # 没有提供子命令，打印帮助信息
             pixivision_parser.print_help()
     elif args.command == "schedule":
-        if args.schedule_command == "time":
-            app.set_schedule_time(args.start, args.end)
-        elif args.schedule_command == "frequency":
-            app.set_schedule_frequency(args.weekly_frequency)
-        elif args.schedule_command == "view":
-            app.view_schedule_config()
-        elif args.schedule_command == "run":
-            app.run_schedule()
-        elif args.schedule_command == "run-once":
-            app.run_once()
+        if args.schedule_command in ["time", "frequency", "view", "run", "run-once"]:
+            schedule_action = args.schedule_command
+            schedule_kind = "push"
+        elif args.schedule_command in ["push", "draft"]:
+            schedule_kind = args.schedule_command
+            schedule_action = getattr(args, f"{schedule_kind}_schedule_action", None)
+        else:
+            schedule_action = None
+            schedule_kind = "push"
+
+        if schedule_action == "time":
+            app.set_schedule_time(args.start, args.end, schedule_kind)
+        elif schedule_action == "frequency":
+            app.set_schedule_frequency(args.weekly_frequency, schedule_kind)
+        elif schedule_action == "view":
+            app.view_schedule_config(schedule_kind)
+        elif schedule_action == "run":
+            app.run_schedule(schedule_kind)
+        elif schedule_action == "run-once":
+            app.run_once(schedule_kind)
         else:
             # 没有提供子命令，打印帮助信息
             schedule_parser.print_help()

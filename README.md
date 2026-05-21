@@ -205,6 +205,7 @@ wx_auto_push/
 - `WECHAT_PREVIEW_TOWXNAME` - 预览接收者微信号
 - `WECHAT_TOKEN` - 微信服务器验证Token
 - `WECHAT_CALLBACK_ENABLED` - 是否启用回调服务器
+ - `WECHAT_CALLBACK_ENABLED` - 是否启用回调服务器（默认 false，示例配置中已关闭）
 - `WECHAT_CALLBACK_HOST` - 回调服务器主机地址
 - `WECHAT_CALLBACK_PORT` - 回调服务器端口
 - `IMAGE_PUBLISH_TYPE` - 图片发布方式，可选值：image（图片消息）或 news（图文消息）
@@ -334,29 +335,28 @@ uv run python main.py stop
 调度管理命令用于配置和运行定时推送任务。
 
 ```bash
-# 设置推送时间范围
-python main.py schedule time --start 08:00 --end 20:00
+# 调度命令现在有二级分支：`push`（默认推送行为）和 `draft`（草稿/上传行为）。
 
-# 设置每周推送频次
-python main.py schedule frequency --weekly-frequency 3
+# 推送分支（等同于原先的 schedule 命令）
+python main.py schedule push time --start 08:00 --end 20:00
+python main.py schedule push frequency --weekly-frequency 3
+python main.py schedule push view
+python main.py schedule push run
+python main.py schedule push run-once
 
-# 查看调度配置
-python main.py schedule view
+# 草稿分支（用于定时从 Pixivision 创建草稿或上传素材）
+python main.py schedule draft upload --start_page 1 --end_page 3
+python main.py schedule draft upload-once --start_page 1 --end_page 3
+python main.py schedule draft time --start 08:00 --end 20:00
+python main.py schedule draft frequency --weekly-frequency 1
+python main.py schedule draft view
+python main.py schedule draft run
+python main.py schedule draft run-once
 
-# 启动调度器（持续运行）
-python main.py schedule run
-
-# 执行一次推送任务后退出
-python main.py schedule run-once
-
-# 启动调度上传（从随机Pixivision插画创建草稿）
-python main.py schedule upload --start_page 1 --end_page 3
-
-# 执行一次上传任务后退出
-python main.py schedule upload-once --start_page 1 --end_page 3
+# 向后兼容：旧的单级命令仍可使用并映射为 `push` 分支（例如原先的 `schedule time` 等）。
 
 # 使用uv
-uv run python main.py schedule [time|frequency|view|run|run-once|upload|upload-once] [args]
+uv run python main.py schedule <push|draft> <time|frequency|view|run|run-once|upload|upload-once> [args]
 ```
 
 **参数说明：**

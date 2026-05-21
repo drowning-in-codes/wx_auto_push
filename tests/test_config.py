@@ -119,6 +119,24 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(time_range.get("start"), "08:00")
         self.assertEqual(time_range.get("end"), "20:00")
 
+    def test_get_push_schedule_config(self):
+        """测试获取推送调度配置（兼容旧配置）"""
+        config = self._create_config_with_mock()
+        push_schedule_config = config.get_push_schedule_config()
+        self.assertEqual(push_schedule_config.get("weekly_frequency"), 3)
+        time_range = push_schedule_config.get("time_range", {})
+        self.assertEqual(time_range.get("start"), "08:00")
+        self.assertEqual(time_range.get("end"), "20:00")
+
+    def test_get_draft_schedule_config(self):
+        """测试获取草稿调度配置（兼容旧配置）"""
+        config = self._create_config_with_mock()
+        draft_schedule_config = config.get_draft_schedule_config()
+        self.assertEqual(draft_schedule_config.get("weekly_frequency"), 3)
+        time_range = draft_schedule_config.get("time_range", {})
+        self.assertEqual(time_range.get("start"), "08:00")
+        self.assertEqual(time_range.get("end"), "20:00")
+
     def test_get_image_compression_config(self):
         """测试获取图片压缩配置"""
         config = self._create_config_with_mock()
@@ -148,6 +166,24 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(upload_config.get("content"), "测试内容")
         self.assertEqual(upload_config.get("show_cover"), 0)
         self.assertEqual(upload_config.get("message_type"), "news")
+
+    def test_set_schedule_branch_values(self):
+        """测试写入分支调度配置"""
+        config = self._create_config_with_mock()
+
+        config.set_push_time_range("09:00", "10:00")
+        config.set_weekly_draft_frequency(6)
+        config.set_draft_time_range("11:00", "12:00")
+
+        self.assertEqual(
+            config.config["schedule"]["push"]["time_range"],
+            {"start": "09:00", "end": "10:00"},
+        )
+        self.assertEqual(config.config["schedule"]["draft"]["weekly_frequency"], 6)
+        self.assertEqual(
+            config.config["schedule"]["draft"]["time_range"],
+            {"start": "11:00", "end": "12:00"},
+        )
 
     def test_get_upload_config_default(self):
         """测试获取上传配置（默认值）"""

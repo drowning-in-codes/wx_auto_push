@@ -5,7 +5,7 @@
     "template_id": "",
     "token": "wechat_auto_push",
     "callback": {
-      "enabled": true,
+      "enabled": false,
       "host": "0.0.0.0",
       "port": 80
     },
@@ -95,12 +95,27 @@
   "http_client": {
     "provider": "curl_cffi",
     "impersonate": "chrome124",
-    "trust_env": false
+    "trust_env": false,
+    "material_upload_client": "curl_cffi"
   },
   "proxy": {
     "enabled": false,
     "http_proxy": "http://localhost:7890",
     "https_proxy": "http://localhost:7890"
+  },
+  "proxy_pool": {
+    "enabled": false,
+    "api_url": "https://proxy.scdn.io/api/get_proxy.php",
+    "protocol": "all",
+    "count": 5,
+    "country_code": "",
+    "fetch_interval": 60,
+    "max_proxies": 10,
+    "proxy_config": {
+      "enabled": false,
+      "http_proxy": "http://localhost:7890",
+      "https_proxy": "http://localhost:7890"
+    }
   },
   "image_compression": {
     "enabled": true,
@@ -112,5 +127,11 @@
     "default_author": "proanimer",
     "default_material_type": "temporary",
     "default_show_cover": 1
+  },
+  "download": {
+    "max_retries": 3,
+    "max_workers": 5,
+    "directory": "./downloads",
+    "enable_crawl_proxy_pool": true
   }
 }

@@ -548,18 +548,64 @@ class WeChatClient:
         """
         access_token = self.get_stable_access_token()
         url = f"{self.base_url}/cgi-bin/material/add_material?access_token={access_token}&type={material_type}"
-
-        files = {"media": open(media_file, "rb")}
-
         data = {}
         if title or introduction:
-            data["description"] = {}
+            desc = {}
             if title:
-                data["description"]["title"] = title
+                desc["title"] = title
             if introduction:
-                data["description"]["introduction"] = introduction
+                desc["introduction"] = introduction
+            # 微信接口要求 description 字段为 JSON 字符串
+            data["description"] = json.dumps(desc, ensure_ascii=False)
 
-        response = self._request("POST", url, files=files, data=data)
+        upload_client = str(
+            self.http_client_config.get(
+                "material_upload_client",
+                self.http_client_config.get("provider", "http_client"),
+            )
+        ).lower()
+
+        # 可选值：http_client / requests / curl_cffi
+        if upload_client in {"http_client", "session", "custom"}:
+            with open(media_file, "rb") as f:
+                response = self._request("POST", url, files={"media": f}, data=data)
+                return response.json()
+
+        request_module = None
+        if upload_client in {"requests", "request"}:
+            import requests as request_module
+        elif upload_client in {"curl_cffi", "curl-cffi", "curl"}:
+            try:
+                from curl_cffi import requests as request_module
+            except Exception:
+                # curl_cffi 不可用时，回退到自定义 http_client
+                with open(media_file, "rb") as f:
+                    response = self._request("POST", url, files={"media": f}, data=data)
+                    return response.json()
+        else:
+            # 未识别配置时，默认使用自定义 http_client
+            with open(media_file, "rb") as f:
+                response = self._request("POST", url, files={"media": f}, data=data)
+                return response.json()
+
+        if self.proxy_config.get("enabled"):
+            proxies = {
+                "http": self.proxy_config.get("http_proxy"),
+                "https": self.proxy_config.get("https_proxy"),
+            }
+        else:
+            proxies = {"http": None, "https": None}
+
+        timeout = self.http_client_config.get("timeout", 60)
+        with open(media_file, "rb") as f:
+            response = request_module.request(
+                "POST",
+                url,
+                files={"media": f},
+                data=data,
+                proxies=proxies,
+                timeout=timeout,
+            )
         return response.json()
 
     def delete_material(self, media_id):

@@ -5,11 +5,11 @@ import time
 
 
 class ScheduleManager:
-    def __init__(self, config, task_func):
+    def __init__(self, config, task_func, schedule_config=None):
         self.config = config
         self.task_func = task_func
         self.scheduler = BlockingScheduler()
-        self.schedule_config = config.get_schedule_config()
+        self.schedule_config = schedule_config or config.get_schedule_config()
 
     def setup_schedule(self):
         weekly_frequency = self.schedule_config.get("weekly_frequency", 3)

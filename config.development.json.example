@@ -9,7 +9,7 @@
       "towxname": "your_wechat_name"
     },
     "callback": {
-      "enabled": true,
+      "enabled": false,
       "host": "0.0.0.0",
       "port": 80
     },
@@ -99,7 +99,8 @@
   "http_client": {
     "provider": "curl_cffi",
     "impersonate": "chrome124",
-    "trust_env": false
+    "trust_env": false,
+    "material_upload_client": "curl_cffi"
   },
   "proxy": {
     "enabled": false,
