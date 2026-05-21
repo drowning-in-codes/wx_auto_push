@@ -399,6 +399,7 @@ class DownloadAndDraftService:
             print(f"\n创建草稿...")
 
             if is_image_message:
+                print("发表贴图消息...")
                 # 构建图片消息
                 articles = [
                     {
@@ -420,6 +421,7 @@ class DownloadAndDraftService:
                     {
                         "title": title,
                         "author": author,
+                        "article_type": "news",
                         "digest": digest,
                         "content": content,
                         "thumb_media_id": media_ids[0] if media_ids else "",

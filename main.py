@@ -1005,7 +1005,7 @@ def main():
         "--message_type",
         "--message-type",
         choices=["news", "newspic"],
-        default="news",
+        default="newspic",
         help="消息类型，news(图文消息)或newspic(图片消息)",
     )
 
