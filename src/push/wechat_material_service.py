@@ -33,6 +33,15 @@ class WeChatMaterialService:
         """
         return self.client.add_material(material_type, media_file, title, description)
 
+    def batch_add_material(self, material_type, media_files, concurrency=5):
+        """
+        批量上传永久素材，media_files 为文件路径列表或支持的条目格式。
+        concurrency: 并发数量，传递给底层 client.batch_add_material。
+        """
+        return self.client.batch_add_material(
+            material_type, media_files, concurrency=concurrency
+        )
+
     def delete_material(self, media_id):
         """
         删除永久素材
