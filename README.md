@@ -344,9 +344,7 @@ python main.py schedule push view
 python main.py schedule push run
 python main.py schedule push run-once
 
-# 草稿分支（用于定时从 Pixivision 创建草稿或上传素材）
-python main.py schedule draft upload --start_page 1 --end_page 3
-python main.py schedule draft upload-once --start_page 1 --end_page 3
+# 草稿分支（用于定时从 Pixivision 创建草稿）
 python main.py schedule draft time --start 08:00 --end 20:00
 python main.py schedule draft frequency --weekly-frequency 1
 python main.py schedule draft view
@@ -356,7 +354,7 @@ python main.py schedule draft run-once
 # 向后兼容：旧的单级命令仍可使用并映射为 `push` 分支（例如原先的 `schedule time` 等）。
 
 # 使用uv
-uv run python main.py schedule <push|draft> <time|frequency|view|run|run-once|upload|upload-once> [args]
+uv run python main.py schedule <push|draft> <time|frequency|view|run|run-once> [args]
 ```
 
 **参数说明：**
@@ -369,17 +367,7 @@ uv run python main.py schedule <push|draft> <time|frequency|view|run|run-once|up
 - `view`：查看当前调度配置
 - `run`：启动调度器，持续运行直到手动停止
 - `run-once`：执行一次推送任务后退出
-- `upload`：启动调度上传，从随机Pixivision插画创建草稿
-  - `--start_page`：开始页码，默认 1
-  - `--end_page`：结束页码，默认 3
-  - `--title`：草稿标题（可选）
-  - `--author`：作者名称（可选）
-  - `--compress`：是否压缩图片（可选）
-  - `--digest`：图文消息摘要（可选）
-  - `--content`：图文消息内容（可选）
-  - `--show_cover`：是否显示封面图片，默认 1
-  - `--message_type`：消息类型，news(图文消息)或newspic(图片消息)，默认 newspic
-- `upload-once`：执行一次上传任务后退出，参数同upload
+> 说明：`upload` 不在 `schedule` 分支下，而是在 `draft` 分支下使用，见下方草稿管理章节。
 
 **配置项：**
 
@@ -735,6 +723,33 @@ python main.py draft create 11525 \
 | `--show-cover`   | 是否显示封面：1显示，0不显示                   | 1      |
 | `--message-type` | 消息类型：`news`(图文消息)或`newspic`(图片消息) | `newspic` |
 
+#### 11.2.1 草稿上传命令（随机 Pixivision）
+
+`draft upload` 命令用于随机从 Pixivision 插画中选择内容并创建草稿，主要用于定时上传场景。
+
+**基本用法：**
+
+```bash
+# 从随机 Pixivision 插画创建草稿
+python main.py draft upload
+
+# 指定随机范围
+python main.py draft upload --start_page 1 --end_page 3
+
+# 使用 uv
+uv run python main.py draft upload --start_page 1 --end_page 3
+```
+
+**参数说明：**
+
+- `--start_page`：开始页数，默认 1
+- `--end_page`：结束页数，默认 3
+
+**说明：**
+
+- `draft upload` 会自动调用 Pixivision 插画选择逻辑，并创建草稿
+- 上传成功后会记录已上传的 article id，避免重复处理
+
 **配置项：**
 
 在 `config.json` 中可以配置草稿默认值：
@@ -753,6 +768,9 @@ python main.py draft create 11525 \
 ```bash
 # 新增草稿
 python main.py draft add '[{"title": "标题", "content": "内容", "thumb_media_id": "缩略图ID"}]'
+
+# 随机 Pixivision 上传并创建草稿
+python main.py draft upload --start_page 1 --end_page 3
 
 # 获取草稿列表
 python main.py draft list
@@ -781,7 +799,7 @@ python main.py draft submit <media_id>
 
 # 使用uv
 
-uv run python main.py draft <subcommand> \[args]
+uv run python main.py draft <subcommand> [args]
 
 
 **参数说明：**
@@ -794,6 +812,9 @@ uv run python main.py draft <subcommand> \[args]
   - `--author`：作者（可选）
   - `--digest`：摘要（可选）
   - `--content_source_url`：原文地址（可选）
+- `upload`：随机从 Pixivision 插画中选择内容并创建草稿
+  - `--start_page`：开始页数，默认 1
+  - `--end_page`：结束页数，默认 3
 - `list`：获取草稿列表
   - `offset`：偏移量，默认为0
   - `count`：数量，默认为10

@@ -13,6 +13,9 @@ import threading
 import signal
 from datetime import datetime
 
+# 初始化草稿服务
+from src.push.draft_service import DownloadAndDraftService
+
 # 添加项目根目录到 Python 路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -143,9 +146,6 @@ class WeChatAutoPush:
             storage_type="json",
             file_path="data/illustrations.json",
         )
-
-        # 初始化草稿服务
-        from src.push.draft_service import DownloadAndDraftService
 
         self.draft_service = DownloadAndDraftService(
             self.push_service,
@@ -610,6 +610,16 @@ class WeChatAutoPush:
         else:
             print("草稿箱开关设置失败")
 
+    def draft_add_random(self):
+        """
+        上传随机图片新增草稿
+        """
+        result = self.wechat_draft_service.create_draft_from_random_pixivision()
+        if result:
+            print(f"新增草稿成功: {result}")
+        else:
+            print("新增草稿失败")
+
     def draft_add(
         self, title, author, content, digest, thumb_media_id, show_cover_pic=1
     ):
@@ -1033,6 +1043,14 @@ def main():
         default="newspic",
         help="消息类型，news(图文消息)或newspic(图片消息)",
     )
+    # 随即上传图片并创建草稿
+    draft_upload_parser = draft_subparsers.add_parser(
+        "upload", help="随机上传图册并创建草稿"
+    )
+    draft_upload_parser.add_argument(
+        "--start_page", type=int, default=1, help="开始页数"
+    )
+    draft_upload_parser.add_argument("--end_page", type=int, default=3, help="结束页数")
 
     args = parser.parse_args()
 
@@ -1123,6 +1141,10 @@ def main():
                 args.digest,
                 args.thumb_media_id,
                 args.show_cover_pic,
+            )
+        elif args.draft_command == "upload":
+            app.draft_service.create_draft_from_random_pixivision(
+                args.start_page, args.end_page
             )
         elif args.draft_command == "list":
             app.draft_list(args.offset, args.count)

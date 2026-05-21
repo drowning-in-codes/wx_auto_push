@@ -479,7 +479,7 @@ class DownloadAndDraftService:
         try:
             # 获取已上传的article id列表
             uploaded_ids = self.upload_history.get_all_uploaded_articles()
-            logger.info(f"已上传的article id数量: {len(uploaded_ids)}")
+            logger.info(f"已上传的article数量: {len(uploaded_ids)}")
 
             # 随机获取一个article id
             article_id = self.pixivision_service.get_random_article_id(
