@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import mimetypes
 import os
 
+import curl_cffi
 import requests as std_requests
 from curl_cffi import requests as curl_requests
 
@@ -60,3 +62,76 @@ def create_session(config: dict | None = None):
     session = module.Session(**session_kwargs)
     session.trust_env = normalized.get("trust_env", False)
     return session
+
+
+class HttpClient:
+    """统一的 HTTP 客户端封装。"""
+
+    def __init__(self, config: dict | None = None):
+        self.config = normalize_http_client_config(config)
+        self.session = create_session(self.config)
+
+    def request(self, method, url, **kwargs):
+        """通过底层 session 发送请求。"""
+        return self.session.request(method, url, **kwargs)
+
+    def upload_img(
+        self, url, media_file, data=None, headers=None, proxies=None, timeout=None
+    ):
+        """封装文件上传，其他请求继续直接使用 session.request。"""
+        if self.config.get("provider") == "curl_cffi":
+            multipart = curl_cffi.CurlMime()
+            try:
+                if isinstance(media_file, (str, bytes, os.PathLike)):
+                    file_path = os.fspath(media_file)
+                    file_name = os.path.basename(file_path)
+                    content_type = (
+                        mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+                    )
+                    multipart.addpart(
+                        name="media",
+                        content_type=content_type,
+                        filename=file_name,
+                        local_path=file_path,
+                    )
+                else:
+                    file_name = getattr(media_file, "name", None) or "media"
+                    content_type = (
+                        mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+                    )
+                    media_file.seek(0)
+                    multipart.addpart(
+                        name="media",
+                        content_type=content_type,
+                        filename=os.path.basename(file_name),
+                        data=media_file.read(),
+                    )
+
+                request_kwargs = {
+                    "multipart": multipart,
+                    "data": data or {},
+                    "headers": headers or {},
+                    "proxies": proxies,
+                    "timeout": timeout,
+                }
+                request_kwargs = {
+                    k: v for k, v in request_kwargs.items() if v is not None
+                }
+                return self.session.request("POST", url, **request_kwargs)
+            finally:
+                multipart.close()
+
+        request_kwargs = {
+            "files": {"media": media_file},
+            "data": data or {},
+            "headers": headers or {},
+            "proxies": proxies,
+            "timeout": timeout,
+        }
+        request_kwargs = {k: v for k, v in request_kwargs.items() if v is not None}
+        return self.session.request("POST", url, **request_kwargs)
+
+
+def create_client(config: dict | None = None):
+    """创建统一 HTTP 客户端封装实例。"""
+    return HttpClient(config)
