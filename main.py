@@ -244,22 +244,21 @@ class WeChatAutoPush:
         """
         运行草稿任务
         """
-        print("test")
-        # try:
-        #     upload_config = self.config.get_upload_config()
-        #     self.draft_service.create_draft_from_random_pixivision(
-        #         upload_config.get("start_page", 1),
-        #         upload_config.get("end_page", 3),
-        #         upload_config.get("title"),
-        #         upload_config.get("author"),
-        #         upload_config.get("compress"),
-        #         upload_config.get("digest"),
-        #         upload_config.get("content"),
-        #         upload_config.get("show_cover", 1),
-        #         upload_config.get("message_type", "newspic"),
-        #     )
-        # except Exception as e:
-        #     print(f"运行草稿任务时出错: {e}")
+        try:
+            upload_config = self.config.get_upload_config()
+            self.draft_service.create_draft_from_random_pixivision(
+                upload_config.get("start_page", 1),
+                upload_config.get("end_page", 3),
+                upload_config.get("title"),
+                upload_config.get("author"),
+                upload_config.get("compress"),
+                upload_config.get("digest"),
+                upload_config.get("content"),
+                upload_config.get("show_cover", 1),
+                upload_config.get("message_type", "newspic"),
+            )
+        except Exception as e:
+            print(f"运行草稿任务时出错: {e}")
 
     def push_text_message(self, content=None):
         """
